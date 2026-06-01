@@ -10,8 +10,12 @@
 # Requires: pg_dump/psql on PATH (or run the psql side via the db container).
 set -euo pipefail
 
-# Source = PARCON's shared DB (read-only). Override if your DSN differs.
-SRC_DSN="${SRC_DSN:-postgresql://parcon:parcon2026@localhost:5433/parcon_csr}"  # pragma: allowlist secret
+# Source = PARCON's shared DB (read-only).
+# PARCON's Postgres lives in the 'pgvector' container (host port 5433 → container 5432).
+# Run via: docker exec pgvector pg_dump ... | psql ...  (see inline below)
+SRC_DSN="${SRC_DSN:-postgresql://parcon:parcon2026@localhost:5432/parcon_csr}"  # pragma: allowlist secret
+# NOTE: pg_dump must run inside the pgvector container — pg_dump is not on the host PATH.
+# Use: docker exec pgvector pg_dump "$SRC_DSN" ... | docker compose exec -T db psql ...
 
 # Destination = the detached curator DB, exposed by docker-compose on 5434.
 : "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (same value as your .env) before running}"

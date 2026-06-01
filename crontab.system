@@ -1,0 +1,9 @@
+CRON_TZ=Asia/Kolkata
+PYTHONPATH=/app
+PYTHONUNBUFFERED=1
+
+# min  hour  dom  mon  dow  user  command
+37  2  * * *  root  cd /app && python -m llm_curator.eval_runner
+17  3  * * *  root  cd /app && python -m llm_curator.openrouter_discovery
+43  3  * * *  root  cd /app && python -m llm_curator.ollama_cloud_discovery
+23  9  * * 0  root  cd /app && python -m llm_curator.proposal_generator
