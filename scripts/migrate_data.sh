@@ -19,7 +19,7 @@ SRC_DSN="${SRC_DSN:-postgresql://parcon:parcon2026@localhost:5432/parcon_csr}"  
 
 # Destination = the detached curator DB, exposed by docker-compose on 5434.
 : "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (same value as your .env) before running}"
-DST_DSN="${DST_DSN:-postgresql://parcon:${POSTGRES_PASSWORD}@localhost:5434/llm_curator}"
+DST_DSN="${DST_DSN:-postgresql://parcon:${POSTGRES_PASSWORD}@localhost:5434/curator}"
 
 # FK-safe order: parents (registry, discovery_runs) before children (evals), then proposals/alerts.
 TABLES=(llm_registry llm_discovery_runs llm_evals llm_proposals llm_alerts)
