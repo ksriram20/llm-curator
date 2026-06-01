@@ -1,0 +1,31 @@
+# User-verified Ollama Cloud free-tier models (Sriram's manual list, 2026-05-20)
+# This file is the authoritative seed for ollama_cloud_discovery.
+# The discovery agent will re-test each of these daily; any that begin returning
+# the "requires a subscription" error get flagged as paid in the registry.
+# Lines starting with # are ignored.
+
+gemma4:31b-cloud
+nemotron-3-super:cloud
+minimax-m2.5:cloud
+qwen3-coder-next:cloud
+glm-4.7:cloud
+minimax-m2.1:cloud
+ministral-3:3b-cloud
+ministral-3:8b-cloud
+ministral-3:14b-cloud
+devstral-small-2:24b-cloud
+qwen3-next:80b-cloud
+nemotron-3-nano:30b-cloud
+rnj-1:8b-cloud
+devstral-2:123b-cloud
+gpt-oss:20b-cloud
+gpt-oss:120b-cloud
+qwen3-vl:235b-cloud
+qwen3-vl:235b-instruct-cloud
+qwen3-coder:480b-cloud
+minimax-m2:cloud
+glm-4.6:cloud
+cogito-2.1:671b-cloud
+gemma3:4b-cloud
+gemma3:12b-cloud
+gemma3:27b-cloud

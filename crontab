@@ -1,0 +1,7 @@
+# llm-curator schedule (supercronic) — mirrors the original PARCON systemd timers.
+# Container TZ is set to Asia/Kolkata in docker-compose.yml so these match IST.
+# min hour dom mon dow   command
+17 3 * * *   python -m llm_curator.openrouter_discovery
+43 3 * * *   python -m llm_curator.ollama_cloud_discovery
+37 2 * * *   python -m llm_curator.eval_runner
+23 9 * * 0   python -m llm_curator.proposal_generator

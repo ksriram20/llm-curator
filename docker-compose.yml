@@ -1,0 +1,48 @@
+# llm-curator — fully detached stack (own Postgres + scheduler).
+# No dependency on PARCON's database or services. The ONLY optional touch-point
+# is a read-only mount of PARCON's litellm_config.yaml, so the curator can compare
+# its eval-based recommendations against what PARCON actually runs. Unset
+# PARCON_LITELLM_CONFIG to run the curator with no PARCON contact at all.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: parcon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: llm_curator
+    volumes:
+      - curator_pgdata:/var/lib/postgresql/data
+      # Schema is applied automatically on a FRESH volume, in filename order.
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    # Exposed on 5434 so it never clashes with PARCON's Postgres (5433).
+    ports:
+      - "127.0.0.1:5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parcon -d llm_curator"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  curator:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      TZ: Asia/Kolkata
+      CSR_DSN: postgresql://parcon:${POSTGRES_PASSWORD:-changeme}@db:5432/llm_curator
+      LITELLM_CONFIG_PATH: /config/litellm_config.yaml
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Read-only view of PARCON's live LiteLLM config (optional).
+      - ${PARCON_LITELLM_CONFIG:-/dev/null}:/config/litellm_config.yaml:ro
+
+volumes:
+  curator_pgdata:
