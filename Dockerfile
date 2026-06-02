@@ -13,8 +13,9 @@ COPY llm_curator/ ./llm_curator/
 COPY memory_notify.py ./memory_notify.py
 COPY crontab.system /etc/cron.d/llm-curator
 COPY entrypoint.sh /entrypoint.sh
+COPY run_job.sh /run_job.sh
 RUN chmod 0644 /etc/cron.d/llm-curator \
-    && chmod +x /entrypoint.sh
+    && chmod +x /entrypoint.sh /run_job.sh
 
 ENV PYTHONPATH=/app \
     PYTHONUNBUFFERED=1
