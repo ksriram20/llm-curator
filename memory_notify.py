@@ -7,9 +7,8 @@ The curator package imports `notify` with a try/except no-op fallback:
     except Exception:
         def notify(*_a, **_k): ...
 
-In PARCON this resolved to the Brain's Telegram relay. Detached, we provide our
-own here: a thin Telegram sender that is a silent no-op when the bot token /
-chat id are not configured. No PARCON dependency.
+A thin Telegram sender that is a silent no-op when the bot token /
+chat id are not configured.
 
 Place this file at the repo root (on PYTHONPATH) so the package picks it up.
 """

@@ -355,7 +355,7 @@ def cmd_in_litellm(_args) -> None:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(prog="llm-curator", description="Inspect the PARCON LLM registry.")
+    p = argparse.ArgumentParser(prog="llm-curator", description="Inspect the LLM registry.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("stats").set_defaults(func=cmd_stats)

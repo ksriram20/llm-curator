@@ -59,12 +59,10 @@ from __future__ import annotations
 # This is exactly the volatility the community articles warned about.
 # Two other free alternatives exist but are either redundant or off-mission:
 #   - qwen/qwen3-next-80b-a3b-instruct:free → redundant with qwen3-next:80b-cloud
-#   - qwen/qwen3-coder:free                 → code-specific, not aligned with PARCON's
-#                                              MSME/research eval prompts
-# Net: 12 OR free models are already aliased in litellm_config + 25 verified-free
-# Ollama Cloud models — that's plenty of eval surface. Leaving overrides empty
-# until either community evidence or PARCON's own eval data points at a specific
-# winner that's actually free TODAY.
+#   - qwen/qwen3-coder:free                 → code-specific, outside default eval scope
+# Net: sufficient free models already in registry for eval surface. Leaving overrides
+# empty until community evidence or eval data points at a specific winner that's
+# actually free TODAY.
 OPENROUTER_FREE_OVERRIDES: dict[str, str] = {
     # Add entries here as: "model_id": "one-line rationale (with date)"
 }

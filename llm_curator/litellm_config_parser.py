@@ -16,7 +16,7 @@ import yaml
 
 DEFAULT_CONFIG_PATH = os.getenv(
     "LITELLM_CONFIG_PATH",
-    "/home/sriram/parcon/docker/litellm/litellm_config.yaml",
+    "",  # no default — set LITELLM_CONFIG_PATH in .env to enable proposal comparison
 )
 
 

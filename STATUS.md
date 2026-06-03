@@ -7,7 +7,7 @@
 
 ## Current Version: v0.1 (baseline)
 
-Extracted from PARCON. Standalone service, own Postgres, own scheduler.
+Extracted from a private internal application. Standalone service, own Postgres, own scheduler.
 
 ---
 
@@ -16,7 +16,7 @@ Extracted from PARCON. Standalone service, own Postgres, own scheduler.
 ### Infrastructure
 - [x] Dockerized stack: `db` (Postgres 16, port 5434) + `curator` (Python + cron)
 - [x] Auto-migration on first boot from `migrations/` folder
-- [x] `scripts/migrate_data.sh` for one-time data import from PARCON
+- [x] `scripts/migrate_data.sh` for one-time data import from an existing source DB
 - [x] `.env`-driven config with sensible defaults; no hardcoded secrets
 
 ### Discovery
@@ -40,7 +40,7 @@ Extracted from PARCON. Standalone service, own Postgres, own scheduler.
 ### CLI
 - [x] `stats`, `leaderboard`, `proposals`, `alerts`, `ack` commands via `python -m llm_curator.cli`
 
-### Scheduling (inherited from PARCON — to be revisited in v0.2)
+### Scheduling (inherited from host app — to be revisited in v0.2)
 - [x] Eval runner: daily 02:37 IST
 - [x] OpenRouter discovery: daily 03:17 IST
 - [x] Ollama Cloud discovery: daily 03:43 IST
@@ -76,12 +76,12 @@ Extracted from PARCON. Standalone service, own Postgres, own scheduler.
 - [ ] Design for community-contributed provider adapters (beyond OpenRouter + Ollama)
 
 ### Scheduling (standalone cleanup)
-- [ ] Revisit cron schedule now that odd-hours avoidance (PARCON conflict) no longer applies
+- [ ] Revisit cron schedule now that odd-hours avoidance (host app conflict) no longer applies
 - [ ] Consider running discovery more frequently for newly added sources
 
-### PARCON Integration (output side)
+### Host Router Integration (output side)
 - [ ] Structured JSON/YAML export from proposal generator for LiteLLM to consume
-- [ ] PARCON reads `llms/<source>/<model>.md` reports + proposal JSON weekly to update routing
+- [ ] Host router reads `llms/<source>/<model>.md` reports + proposal JSON weekly to update routing
 
 ---
 

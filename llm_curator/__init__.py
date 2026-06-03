@@ -1,1 +1,1 @@
-"""PARCON LLM Curator — discovers, catalogs, evaluates LLMs across providers."""
+"""llm-curator — discovers, catalogs, evaluates LLMs across providers."""

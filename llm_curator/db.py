@@ -1,7 +1,7 @@
-"""DB helper for LLM curator.
+"""DB helper for llm-curator.
 
-Follows the pattern in sahay/brain/kb.py — lazy connection with reconnect-on-drop.
-Uses the same CSR_DSN env var so we share PARCON's existing PostgreSQL instance.
+Lazy connection with reconnect-on-drop.
+Configure via DATABASE_URL env var (or CSR_DSN for legacy compat).
 """
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ import psycopg2.extras
 logger = logging.getLogger(__name__)
 
 DSN = os.getenv(
-    "CSR_DSN",
-    "postgresql://parcon:parcon2026@localhost:5433/parcon_csr",  # pragma: allowlist secret
+    "DATABASE_URL",
+    os.getenv("CSR_DSN", "postgresql://curator_user:changeme@localhost:5434/curator"),
 )
 
 _conn: Optional[psycopg2.extensions.connection] = None

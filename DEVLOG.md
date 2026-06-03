@@ -8,14 +8,14 @@
 
 ## 2026-06-03 — Project inception as standalone repo
 
-**Context:** llm-curator was originally part of PARCON (`parcon/sahay/llm_curator/`), running as systemd timers inside the PARCON stack and sharing PARCON's Postgres database.
+**Context:** llm-curator was originally embedded inside a private internal application, running as scheduled jobs sharing that application's Postgres database.
 
 **Decision:** Extract into a fully standalone repo with its own Postgres instance, own Docker stack, and own cron scheduler.
 
 **Rationale:**
-- PARCON's database and scheduler created hidden coupling — llm-curator jobs were scheduled at odd hours (02:37, 03:17, 03:43 IST) specifically to avoid interfering with PARCON workloads
-- A standalone service can evolve independently, be open-sourced, and be used by anyone without requiring PARCON
-- The only optional link back to PARCON is a read-only mount of `litellm_config.yaml` for proposal comparison; unset `PARCON_LITELLM_CONFIG` and there is zero dependency
+- The shared database and scheduler created hidden coupling — jobs were scheduled at odd hours (02:37, 03:17, 03:43 IST) specifically to avoid interfering with the host application's workloads
+- A standalone service can evolve independently, be open-sourced, and be used by anyone
+- The only optional link back to any host router is a read-only mount of `litellm_config.yaml` for proposal comparison; unset `LITELLM_CONFIG_PATH` and the curator is entirely self-contained
 
 **What was carried over:** Python package verbatim (no code edits needed — all coupling was env-driven). Four migration files. Crontab and Dockerfile adapted for standalone operation.
 
@@ -66,7 +66,7 @@
 
 3. **Grader upgrade** — research-backed replacement of shallow graders; `grader_version` column on `llm_evals`; monthly versioning cycle.
 
-4. **LLM narrative reports** — after each eval run, an LLM generates a capability writeup for the model; stored as `llms/<source>/<model>.md`; serves as the primary interface to PARCON routing decisions.
+4. **LLM narrative reports** — after each eval run, an LLM generates a capability writeup for the model; stored as `llms/<source>/<model>.md`; serves as the primary interface to the host router's routing decisions.
 
 5. **Provider adapter interface** — formalise `discover()` + `call()` contract so any provider can be plugged in.
 

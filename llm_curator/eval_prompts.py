@@ -1,4 +1,4 @@
-"""Fixed eval prompts + deterministic graders for PARCON use cases.
+"""Fixed eval prompts + deterministic graders for llm-curator.
 
 Design rules:
   - Every prompt is short (keep tokens tiny — single eval ≈ 1.5K tokens total)
@@ -117,7 +117,7 @@ PROMPTS: list[dict[str, Any]] = [
         "grader": grade_integer,
     },
 
-    # ── extraction (MSME-flavoured to mirror PARCON's real work) ───────────
+    # ── extraction ──────────────────────────────────────────────────────────
     {
         "id": "extraction_msme_json",
         "use_case": "extraction",

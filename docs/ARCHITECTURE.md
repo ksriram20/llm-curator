@@ -11,7 +11,7 @@
 
 ## Purpose
 
-llm-curator is a self-hosted platform that continuously tracks LLM models across providers — which are free, which have gone paid, which are deprecated — evaluates them deterministically, generates human-readable capability reports, and surfaces routing proposals for LiteLLM-based systems like PARCON.
+llm-curator is a self-hosted platform that continuously tracks LLM models across providers — which are free, which have gone paid, which are deprecated — evaluates them deterministically, generates human-readable capability reports, and surfaces routing proposals for any LiteLLM-based system.
 
 It never auto-applies anything. It informs; a human or a downstream LLM decides.
 
@@ -48,7 +48,7 @@ It never auto-applies anything. It informs; a human or a downstream LLM decides.
 | Ollama Cloud discovery | daily 03:43 | `ollama_cloud_discovery.py` | Scrapes Ollama Cloud, tests each model, flags paid-only |
 | Proposal generator | Sundays 09:23 | `proposal_generator.py` | Compares leaderboard vs live LiteLLM config, writes proposal |
 
-> Note: Odd scheduling times were inherited from PARCON to avoid job conflicts. Now standalone, these will be rationalised in v0.2.
+> Note: Odd scheduling times were inherited from the original host application to avoid job conflicts. Now standalone, these will be rationalised in v0.2.
 
 ---
 
@@ -68,7 +68,7 @@ llm_curator/
 │
 ├── proposal_generator.py    # Weekly diff: leaderboard vs litellm_config.yaml
 ├── alert_detector.py        # Detects in-use models gone paid/deprecated/unevaluated
-├── litellm_config_parser.py # Reads PARCON's litellm_config.yaml (read-only)
+├── litellm_config_parser.py # Reads litellm_config.yaml from host router (read-only, optional)
 ├── sync_litellm_flag.py     # Syncs in_litellm flag in registry from config file
 │
 └── cli.py                   # CLI: stats, leaderboard, proposals, alerts, ack
@@ -166,11 +166,11 @@ The file is auto-generated after each eval run:
 2. An LLM (configured via `REPORT_MODEL` env var) writes a narrative capability summary
 3. The file is committed or written to disk — not stored only in the DB
 
-This file is the primary interface between llm-curator and PARCON's routing decisions.
+This file is the primary interface between llm-curator and the host router's routing decisions.
 
 ---
 
-## PARCON Integration (v0.2 output path)
+## Host Router Integration (v0.2 output path)
 
 ```
 llm_curator eval run
@@ -179,9 +179,9 @@ llms/openrouter/<model>.md  (narrative report)
     +
 proposals/<date>.json        (structured routing diff)
     ▼
-PARCON reads these weekly
+Host router reads these weekly
     ▼
-LiteLLM config updated by PARCON (human-reviewed or LLM-assisted)
+LiteLLM config updated (human-reviewed or LLM-assisted)
 ```
 
 ---

@@ -8,8 +8,7 @@ Two responsibilities:
      they exist but can't use them on the free tier.
 
 Why test-before-add: Ollama Cloud silently moves models between free and paid
-tiers without notice. The PARCON config recently had kimi-cloud and deepseek-v3-cloud
-fail because they had been moved to paid. This agent prevents that.
+tiers without notice. This agent prevents that by testing before registering.
 
 Run manually:   python -m llm_curator.ollama_cloud_discovery
 Run from systemd timer: llm-curator-ollama.timer (daily)
@@ -73,7 +72,7 @@ def load_seed_tags() -> list[str]:
 def scrape_catalog() -> list[str]:
     """Return list of cloud-model slugs from ollama.com (e.g. 'cogito-2.1:671b-cloud')."""
     logger.info("Scraping %s ...", OLLAMA_SEARCH_URL)
-    resp = requests.get(OLLAMA_SEARCH_URL, timeout=30, headers={"User-Agent": "parcon-llm-curator/1.0"})
+    resp = requests.get(OLLAMA_SEARCH_URL, timeout=30, headers={"User-Agent": "llm-curator/1.0"})
     resp.raise_for_status()
     html = resp.text
 
@@ -96,7 +95,7 @@ def fetch_cloud_tags(base_slug: str) -> list[str]:
     """Fetch the library page for a model and extract its :*-cloud tags."""
     url = OLLAMA_LIBRARY_URL.format(slug=base_slug)
     try:
-        resp = requests.get(url, timeout=20, headers={"User-Agent": "parcon-llm-curator/1.0"})
+        resp = requests.get(url, timeout=20, headers={"User-Agent": "llm-curator/1.0"})
         if resp.status_code != 200:
             return []
     except requests.RequestException:

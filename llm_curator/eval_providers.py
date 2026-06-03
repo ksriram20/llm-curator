@@ -70,8 +70,8 @@ def _call_openrouter(
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://parcon.local",       # OpenRouter recommends
-        "X-Title": "PARCON LLM Curator",
+        "HTTP-Referer": "https://github.com/ksriram20/llm-curator",
+        "X-Title": "llm-curator",
     }
     start = time.monotonic()
     try:

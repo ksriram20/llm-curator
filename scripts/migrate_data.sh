@@ -1,40 +1,36 @@
 #!/usr/bin/env bash
 #
-# Stage 1 -> 2 bridge: copy existing curator data out of PARCON's parcon_csr
-# into the detached curator database. READ-ONLY on PARCON (pg_dump only) — it
-# never writes to or alters parcon_csr. Run this AFTER `docker compose up -d db`
-# has created the fresh schema, and AFTER you've reviewed it.
+# One-time data migration: copy existing curator tables from a source Postgres DB
+# into the standalone curator database. READ-ONLY on the source (pg_dump only).
 #
-#   ./scripts/migrate_data.sh
+# Run this AFTER `docker compose up -d db` has created the fresh schema.
 #
-# Requires: pg_dump/psql on PATH (or run the psql side via the db container).
+#   SRC_DSN=postgresql://user:pass@host:port/dbname ./scripts/migrate_data.sh
+#
+# Requires pg_dump and psql on PATH, or adapt to run via docker exec.
 set -euo pipefail
 
-# Source = PARCON's shared DB (read-only).
-# PARCON's Postgres lives in the 'pgvector' container (host port 5433 → container 5432).
-# Run via: docker exec pgvector pg_dump ... | psql ...  (see inline below)
-SRC_DSN="${SRC_DSN:-postgresql://parcon:parcon2026@localhost:5432/parcon_csr}"  # pragma: allowlist secret
-# NOTE: pg_dump must run inside the pgvector container — pg_dump is not on the host PATH.
-# Use: docker exec pgvector pg_dump "$SRC_DSN" ... | docker compose exec -T db psql ...
+# Source DB — set SRC_DSN to your existing database connection string.
+: "${SRC_DSN:?Set SRC_DSN=postgresql://user:pass@host:port/dbname before running}"
 
-# Destination = the detached curator DB, exposed by docker-compose on 5434.
+# Destination = the standalone curator DB (docker-compose port 5434).
 : "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (same value as your .env) before running}"
-DST_DSN="${DST_DSN:-postgresql://parcon:${POSTGRES_PASSWORD}@localhost:5434/curator}"
+DST_DSN="${DST_DSN:-postgresql://curator_user:${POSTGRES_PASSWORD}@localhost:5434/curator}"
 
 # FK-safe order: parents (registry, discovery_runs) before children (evals), then proposals/alerts.
 TABLES=(llm_registry llm_discovery_runs llm_evals llm_proposals llm_alerts)
 
-echo "→ Exporting ${#TABLES[@]} tables from parcon_csr (read-only)…"
+echo "→ Exporting ${#TABLES[@]} tables from source DB (read-only)…"
 DUMP=/tmp/curator_data_$(date +%s).sql
 pg_dump "$SRC_DSN" --data-only --no-owner --no-privileges \
   "${TABLES[@]/#/--table=}" > "$DUMP"
 echo "  wrote $DUMP ($(wc -l < "$DUMP") lines)"
 
-echo "→ Loading into detached curator DB…"
+echo "→ Loading into standalone curator DB…"
 psql "$DST_DSN" -v ON_ERROR_STOP=1 -f "$DUMP"
 
-echo "→ Row counts in detached DB:"
+echo "→ Row counts in curator DB:"
 for t in "${TABLES[@]}"; do
   printf '   %-22s %s\n' "$t" "$(psql "$DST_DSN" -tAc "SELECT count(*) FROM $t")"
 done
-echo "✓ Data migration complete. PARCON's parcon_csr was not modified."
+echo "✓ Migration complete. Source database was not modified."
