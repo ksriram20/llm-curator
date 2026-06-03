@@ -54,7 +54,7 @@ services:
     environment:
       DATABASE_URL: postgresql://curator_user:${POSTGRES_PASSWORD:-changeme}@db:5432/curator
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8088:8080"
 
 volumes:
   curator_pgdata:
