@@ -1,3 +1,8 @@
 psycopg2-binary>=2.9
 requests>=2.31
 PyYAML>=6.0
+
+# v2 grader dependencies (optional — graders degrade gracefully if absent)
+jsonschema>=4.0        # grade_json_doc: deep JSON schema validation
+rapidfuzz>=3.0         # grade_quasi_exact: fuzzy string matching fallback
+sympy>=1.12            # grade_sympy: symbolic math equivalence for reasoning

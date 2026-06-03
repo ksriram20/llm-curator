@@ -28,7 +28,7 @@ from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from llm_curator.db import cursor, get_conn  # noqa: E402
-from llm_curator.eval_prompts import PROMPTS  # noqa: E402
+from llm_curator.eval_prompts import PROMPTS, GRADER_VERSION  # noqa: E402
 from llm_curator.eval_providers import call, estimate_cost_usd  # noqa: E402
 from llm_curator.policy import is_eval_eligible  # noqa: E402
 
@@ -121,11 +121,13 @@ def record_eval(model_id_pk: int, prompt: dict[str, Any], result, score: float |
             INSERT INTO llm_evals (
                 model_registry_id, use_case, eval_name, score,
                 raw_output, expected_output, latency_ms,
-                tokens_input, tokens_output, cost_usd, error_message
+                tokens_input, tokens_output, cost_usd, error_message,
+                grader_version
             ) VALUES (
                 %s, %s, %s, %s,
                 %s, %s, %s,
-                %s, %s, %s, %s
+                %s, %s, %s, %s,
+                %s
             )
             """,
             (
@@ -140,6 +142,7 @@ def record_eval(model_id_pk: int, prompt: dict[str, Any], result, score: float |
                 result.tokens_output,
                 cost_usd,
                 error,
+                GRADER_VERSION,
             ),
         )
 
