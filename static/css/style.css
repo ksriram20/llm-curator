@@ -1,0 +1,234 @@
+/* llm-curator UI — v0.2 */
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; }
+
+#app-wrapper { display: flex; min-height: 100vh; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+#sidebar {
+    width: 220px;
+    min-height: 100vh;
+    background: #1e293b;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.sidebar-brand {
+    padding: 1.2rem 1.25rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    border-bottom: 1px solid #334155;
+    letter-spacing: -0.01em;
+}
+
+.sidebar-brand small {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 400;
+    color: #64748b;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-top: 2px;
+}
+
+.sidebar-nav { list-style: none; padding: 0.5rem 0; margin: 0; flex: 1; }
+
+.sidebar-nav li a {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 1.25rem;
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 0.875rem;
+    border-left: 3px solid transparent;
+    transition: all 0.12s;
+}
+
+.sidebar-nav li a:hover { color: #e2e8f0; background: #273549; }
+
+.sidebar-nav li a.active {
+    color: #f1f5f9;
+    background: #273549;
+    border-left-color: #6366f1;
+}
+
+.sidebar-section {
+    padding: 0.6rem 1.25rem 0.2rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.sidebar-footer {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.7rem;
+    color: #475569;
+    border-top: 1px solid #273549;
+}
+
+/* ── Main content ────────────────────────────────────────────────────────── */
+#main-content { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+.content-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.content-header h5 { margin: 0; font-weight: 600; color: #0f172a; }
+.content-header p  { margin: 0; font-size: 0.8rem; color: #64748b; }
+
+.content-body { padding: 1.25rem 1.5rem; flex: 1; }
+
+/* ── Stat cards ──────────────────────────────────────────────────────────── */
+.stat-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 1.1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.stat-val  { font-size: 1.9rem; font-weight: 700; line-height: 1; color: #0f172a; }
+.stat-lbl  { font-size: 0.75rem; color: #64748b; }
+.stat-sub  { font-size: 0.7rem; color: #94a3b8; margin-top: 2px; }
+
+/* ── Cards / panels ──────────────────────────────────────────────────────── */
+.panel {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.panel-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #334155;
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.panel-body { padding: 1rem; }
+
+/* ── Tables ──────────────────────────────────────────────────────────────── */
+.table-wrap { background: #fff; border: 1px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; }
+
+.table { margin: 0; font-size: 0.82rem; }
+.table thead th {
+    background: #f8fafc;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.6rem 0.75rem;
+    white-space: nowrap;
+}
+.table td { padding: 0.55rem 0.75rem; vertical-align: middle; border-color: #f1f5f9; }
+.table tbody tr:hover { background: #f8fafc; }
+
+/* ── Filters bar ─────────────────────────────────────────────────────────── */
+.filters {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.filters label { font-size: 0.75rem; color: #64748b; margin-bottom: 0; }
+.filters select, .filters input {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.35rem;
+    background: #f8fafc;
+    color: #1e293b;
+    outline: none;
+}
+.filters select:focus, .filters input:focus { border-color: #6366f1; background: #fff; }
+
+/* ── Score colouring ─────────────────────────────────────────────────────── */
+.s-hi  { color: #16a34a; font-weight: 600; }
+.s-mid { color: #d97706; font-weight: 600; }
+.s-lo  { color: #dc2626; font-weight: 600; }
+.s-nil { color: #94a3b8; }
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+.bdg {
+    display: inline-block;
+    padding: 0.15rem 0.45rem;
+    border-radius: 0.25rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.bdg-green  { background: #dcfce7; color: #15803d; }
+.bdg-orange { background: #fff7ed; color: #c2410c; }
+.bdg-blue   { background: #dbeafe; color: #1d4ed8; }
+.bdg-red    { background: #fee2e2; color: #b91c1c; }
+.bdg-yellow { background: #fef9c3; color: #a16207; }
+.bdg-gray   { background: #f1f5f9; color: #475569; }
+.bdg-purple { background: #ede9fe; color: #6d28d9; }
+
+/* ── States ──────────────────────────────────────────────────────────────── */
+.empty-state {
+    padding: 2.5rem;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.85rem;
+}
+
+.loading-state {
+    padding: 2rem;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.82rem;
+}
+
+/* ── Proposal diff view ──────────────────────────────────────────────────── */
+.change-item {
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.35rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.8rem;
+}
+.change-replace { background: #fff7ed; border-left: 3px solid #f59e0b; }
+.change-add     { background: #f0fdf4; border-left: 3px solid #22c55e; }
+.change-remove  { background: #fef2f2; border-left: 3px solid #ef4444; }
+
+.change-kind {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.2rem;
+}
+
+.mono { font-family: ui-monospace, monospace; font-size: 0.78rem; }

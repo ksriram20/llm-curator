@@ -41,5 +41,20 @@ services:
       # Read-only mount of your LiteLLM config (optional — proposals work without it).
       - ${LITELLM_CONFIG_PATH:-/dev/null}:/config/litellm_config.yaml:ro
 
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://curator_user:${POSTGRES_PASSWORD:-changeme}@db:5432/curator
+    ports:
+      - "127.0.0.1:8080:8080"
+
 volumes:
   curator_pgdata:

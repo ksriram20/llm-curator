@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>llm-curator — Registry</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+<div id="app-wrapper">
+
+  <nav id="sidebar">
+    <div class="sidebar-brand">llm-curator<small>evaluation platform</small></div>
+    <ul class="sidebar-nav">
+      <li><a href="/"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+      <div class="sidebar-section">Evaluate</div>
+      <li><a href="/leaderboard.html"><i class="bi bi-trophy"></i> Leaderboard</a></li>
+      <li><a href="/registry.html"><i class="bi bi-database"></i> Registry</a></li>
+      <div class="sidebar-section">Monitor</div>
+      <li><a href="/proposals.html"><i class="bi bi-lightbulb"></i> Proposals</a></li>
+      <li><a href="/alerts.html"><i class="bi bi-bell"></i> Alerts <span id="alert-badge" class="bdg bdg-red ms-auto" style="display:none"></span></a></li>
+    </ul>
+    <div class="sidebar-footer">v0.2 · read-only</div>
+  </nav>
+
+  <div id="main-content">
+    <div class="content-header">
+      <div><h5>Registry</h5><p>All known models across providers</p></div>
+      <span id="row-count" class="bdg bdg-gray"></span>
+    </div>
+
+    <div class="content-body">
+      <div class="filters">
+        <label>Source</label>
+        <select id="f-source">
+          <option value="">All sources</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="ollama-cloud">Ollama Cloud</option>
+        </select>
+        <label>Status</label>
+        <select id="f-status">
+          <option value="">All</option>
+          <option value="free">Free only</option>
+          <option value="routing">In routing</option>
+          <option value="deprecated">Deprecated</option>
+        </select>
+        <label>Search</label>
+        <input type="text" id="f-search" placeholder="model name…" style="width:160px">
+      </div>
+
+      <div class="table-wrap">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Source</th>
+              <th>Provider</th>
+              <th>Status</th>
+              <th>Context</th>
+              <th>Input $/1M</th>
+              <th>Output $/1M</th>
+              <th>Last seen</th>
+              <th>Last evaluated</th>
+            </tr>
+          </thead>
+          <tbody id="registry-tbody">
+            <tr><td colspan="9" class="loading-state">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/app.js"></script>
+<script>
+let allRows = [];
+
+function fmtPrice(v) {
+  if (v === null || v === undefined) return '—';
+  return '$' + (parseFloat(v) * 1_000_000).toFixed(2);
+}
+
+function applyFilters() {
+  const src    = document.getElementById('f-source').value;
+  const status = document.getElementById('f-status').value;
+  const search = document.getElementById('f-search').value.toLowerCase();
+
+  let rows = allRows;
+  if (src)    rows = rows.filter(r => r.source === src);
+  if (status === 'free')       rows = rows.filter(r => r.is_free && !r.deprecated);
+  if (status === 'routing')    rows = rows.filter(r => r.in_litellm);
+  if (status === 'deprecated') rows = rows.filter(r => r.deprecated);
+  if (search) rows = rows.filter(r => (r.model_id || '').toLowerCase().includes(search));
+
+  document.getElementById('row-count').textContent = `${rows.length} models`;
+  renderTable('registry-tbody', rows, [
+    r => `<span class="mono">${r.model_id}</span>`,
+    r => `<span class="bdg bdg-gray">${r.source}</span>`,
+    r => r.provider || '—',
+    r => [freeBadge(r.is_free), routingBadge(r.in_litellm), deprecatedBadge(r.deprecated)].filter(Boolean).join(' '),
+    r => r.context_length ? r.context_length.toLocaleString() : '—',
+    r => fmtPrice(r.pricing_input),
+    r => fmtPrice(r.pricing_output),
+    r => fmtDate(r.last_seen),
+    r => r.last_evaluated_at ? fmtDate(r.last_evaluated_at) : '<span class="s-nil">never</span>',
+  ]);
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    allRows = await api('/api/registry/');
+    ['f-source','f-status','f-search'].forEach(id => {
+      document.getElementById(id).addEventListener('input', applyFilters);
+      document.getElementById(id).addEventListener('change', applyFilters);
+    });
+    applyFilters();
+  } catch (err) {
+    document.getElementById('registry-tbody').innerHTML =
+      `<tr><td colspan="9" class="empty-state text-danger">Error: ${err.message}</td></tr>`;
+  }
+});
+</script>
+</body>
+</html>

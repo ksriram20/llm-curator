@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>llm-curator — Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+<div id="app-wrapper">
+
+  <!-- Sidebar -->
+  <nav id="sidebar">
+    <div class="sidebar-brand">
+      llm-curator
+      <small>evaluation platform</small>
+    </div>
+    <ul class="sidebar-nav">
+      <li><a href="/"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+      <div class="sidebar-section">Evaluate</div>
+      <li><a href="/leaderboard.html"><i class="bi bi-trophy"></i> Leaderboard</a></li>
+      <li><a href="/registry.html"><i class="bi bi-database"></i> Registry</a></li>
+      <div class="sidebar-section">Monitor</div>
+      <li><a href="/proposals.html"><i class="bi bi-lightbulb"></i> Proposals</a></li>
+      <li>
+        <a href="/alerts.html">
+          <i class="bi bi-bell"></i> Alerts
+          <span id="alert-badge" class="bdg bdg-red ms-auto" style="display:none"></span>
+        </a>
+      </li>
+    </ul>
+    <div class="sidebar-footer">v0.2 · read-only</div>
+  </nav>
+
+  <!-- Main -->
+  <div id="main-content">
+    <div class="content-header">
+      <div>
+        <h5>Dashboard</h5>
+        <p>Overview of the LLM registry and evaluation status</p>
+      </div>
+    </div>
+
+    <div class="content-body">
+
+      <!-- Stat cards -->
+      <div class="row g-3 mb-3" id="stat-cards">
+        <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-val" id="s-total">—</div><div class="stat-lbl">Total Models</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-val" id="s-free">—</div><div class="stat-lbl">Free &amp; Active</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-val" id="s-routing">—</div><div class="stat-lbl">In Routing</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-val" id="s-alerts">—</div><div class="stat-lbl">Open Alerts</div><div class="stat-sub" id="s-alerts-sub"></div></div></div>
+      </div>
+
+      <div class="row g-3">
+        <!-- Last eval -->
+        <div class="col-md-6">
+          <div class="panel">
+            <div class="panel-header"><span><i class="bi bi-check2-circle me-1"></i>Last Eval Run</span></div>
+            <div class="panel-body" id="last-eval-body">
+              <div class="loading-state">Loading…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Latest proposal -->
+        <div class="col-md-6">
+          <div class="panel">
+            <div class="panel-header"><span><i class="bi bi-lightbulb me-1"></i>Latest Proposal</span></div>
+            <div class="panel-body" id="last-proposal-body">
+              <div class="loading-state">Loading…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const d = await api('/api/stats/');
+
+    document.getElementById('s-total').textContent   = d.total_models ?? '—';
+    document.getElementById('s-free').textContent    = d.active_free  ?? '—';
+    document.getElementById('s-routing').textContent = d.in_routing   ?? '—';
+    document.getElementById('s-alerts').textContent  = d.open_alerts  ?? '0';
+    if (d.critical_alerts > 0) {
+      document.getElementById('s-alerts-sub').innerHTML =
+        `<span class="bdg bdg-red">${d.critical_alerts} critical</span>`;
+    }
+
+    const evalEl = document.getElementById('last-eval-body');
+    if (d.last_eval) {
+      const e = d.last_eval;
+      evalEl.innerHTML = `
+        <div class="mono mb-1">${e.model_id}</div>
+        <div class="d-flex gap-2 flex-wrap mt-1">
+          <span class="bdg bdg-gray">${e.grader_version}</span>
+          <span class="bdg bdg-purple">score ${fmtScore(e.mean_score)}</span>
+        </div>
+        <div class="stat-sub mt-2">${fmtDate(e.tested_at)}</div>`;
+    } else {
+      evalEl.innerHTML = '<div class="empty-state">No evals run yet.</div>';
+    }
+
+    const propEl = document.getElementById('last-proposal-body');
+    if (d.last_proposal) {
+      const p = d.last_proposal;
+      propEl.innerHTML = `
+        <div class="mb-1">${statusBadge(p.status)}</div>
+        <div class="mb-2" style="font-size:0.82rem">${p.summary || '—'}</div>
+        <div class="d-flex gap-2 flex-wrap">
+          <span class="bdg bdg-yellow">↔ ${p.n_replacements} replace</span>
+          <span class="bdg bdg-green">+ ${p.n_additions} add</span>
+          <span class="bdg bdg-red">− ${p.n_removals} remove</span>
+        </div>
+        <div class="stat-sub mt-2">${fmtDate(p.generated_at)}
+          <a href="/proposals.html" class="ms-2" style="font-size:0.7rem">view all →</a>
+        </div>`;
+    } else {
+      propEl.innerHTML = '<div class="empty-state">No proposals generated yet.</div>';
+    }
+
+  } catch (err) {
+    document.getElementById('stat-cards').innerHTML =
+      `<div class="col-12"><div class="empty-state text-danger">Failed to load stats: ${err.message}</div></div>`;
+  }
+});
+</script>
+</body>
+</html>

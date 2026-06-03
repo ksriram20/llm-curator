@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>llm-curator — Proposals</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+<div id="app-wrapper">
+
+  <nav id="sidebar">
+    <div class="sidebar-brand">llm-curator<small>evaluation platform</small></div>
+    <ul class="sidebar-nav">
+      <li><a href="/"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+      <div class="sidebar-section">Evaluate</div>
+      <li><a href="/leaderboard.html"><i class="bi bi-trophy"></i> Leaderboard</a></li>
+      <li><a href="/registry.html"><i class="bi bi-database"></i> Registry</a></li>
+      <div class="sidebar-section">Monitor</div>
+      <li><a href="/proposals.html"><i class="bi bi-lightbulb"></i> Proposals</a></li>
+      <li><a href="/alerts.html"><i class="bi bi-bell"></i> Alerts <span id="alert-badge" class="bdg bdg-red ms-auto" style="display:none"></span></a></li>
+    </ul>
+    <div class="sidebar-footer">v0.2 · read-only</div>
+  </nav>
+
+  <div id="main-content">
+    <div class="content-header">
+      <div><h5>Proposals</h5><p>Weekly routing change recommendations — never auto-applied</p></div>
+    </div>
+
+    <div class="content-body">
+
+      <!-- List -->
+      <div id="proposals-list">
+        <div class="loading-state">Loading…</div>
+      </div>
+
+      <!-- Detail panel -->
+      <div id="proposal-detail" class="mt-3" style="display:none">
+        <div class="panel">
+          <div class="panel-header">
+            <span id="detail-title">Proposal detail</span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="closeDetail()">✕ Close</button>
+          </div>
+          <div class="panel-body" id="detail-body"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/app.js"></script>
+<script>
+let proposals = [];
+
+function changeClass(kind) {
+  return { replace: 'change-replace', add: 'change-add', remove: 'change-remove' }[kind] || '';
+}
+
+function renderChangeItem(c) {
+  const kind = c.kind || '?';
+  let detail = '';
+  if (kind === 'replace') detail = `<span class="mono">${c.old_model}</span> → <span class="mono">${c.new_model}</span>`;
+  if (kind === 'add')     detail = `<span class="mono">${c.new_model}</span>`;
+  if (kind === 'remove')  detail = `<span class="mono">${c.alias || c.old_model}</span>`;
+  const ev = c.evidence ? ` <span class="s-nil">(score ${fmtScore(c.evidence.new_score)}, ${c.evidence.n_evals} evals)</span>` : '';
+  return `
+    <div class="change-item ${changeClass(kind)}">
+      <div class="change-kind">${kind}</div>
+      <div>${detail}${ev}</div>
+      ${c.rationale ? `<div class="s-nil mt-1" style="font-size:0.75rem">${c.rationale}</div>` : ''}
+    </div>`;
+}
+
+async function showDetail(id) {
+  document.getElementById('proposal-detail').style.display = 'block';
+  document.getElementById('detail-body').innerHTML = '<div class="loading-state">Loading…</div>';
+  document.getElementById('detail-title').textContent = `Proposal #${id}`;
+  try {
+    const p = await api(`/api/proposals/${id}`);
+    const changes = p.proposed_changes || [];
+    document.getElementById('detail-body').innerHTML = changes.length
+      ? changes.map(renderChangeItem).join('')
+      : '<div class="empty-state">No changes proposed.</div>';
+    document.getElementById('proposal-detail').scrollIntoView({ behavior: 'smooth' });
+  } catch (err) {
+    document.getElementById('detail-body').innerHTML = `<div class="empty-state text-danger">Error: ${err.message}</div>`;
+  }
+}
+
+function closeDetail() {
+  document.getElementById('proposal-detail').style.display = 'none';
+}
+
+function renderProposals(rows) {
+  const el = document.getElementById('proposals-list');
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty-state">No proposals generated yet.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div class="table-wrap">
+      <table class="table table-hover">
+        <thead><tr>
+          <th>Date</th><th>Summary</th><th>Status</th>
+          <th>Replace</th><th>Add</th><th>Remove</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(p => `
+            <tr>
+              <td style="white-space:nowrap">${fmtDate(p.generated_at)}</td>
+              <td style="max-width:340px;font-size:0.8rem">${p.summary || '—'}</td>
+              <td>${statusBadge(p.status)}</td>
+              <td><span class="bdg bdg-yellow">${p.n_replacements}</span></td>
+              <td><span class="bdg bdg-green">${p.n_additions}</span></td>
+              <td><span class="bdg bdg-red">${p.n_removals}</span></td>
+              <td><button class="btn btn-sm btn-outline-primary" onclick="showDetail(${p.id})">View</button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    proposals = await api('/api/proposals/');
+    renderProposals(proposals);
+  } catch (err) {
+    document.getElementById('proposals-list').innerHTML =
+      `<div class="empty-state text-danger">Error: ${err.message}</div>`;
+  }
+});
+</script>
+</body>
+</html>

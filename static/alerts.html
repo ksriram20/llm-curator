@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>llm-curator — Alerts</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+<div id="app-wrapper">
+
+  <nav id="sidebar">
+    <div class="sidebar-brand">llm-curator<small>evaluation platform</small></div>
+    <ul class="sidebar-nav">
+      <li><a href="/"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+      <div class="sidebar-section">Evaluate</div>
+      <li><a href="/leaderboard.html"><i class="bi bi-trophy"></i> Leaderboard</a></li>
+      <li><a href="/registry.html"><i class="bi bi-database"></i> Registry</a></li>
+      <div class="sidebar-section">Monitor</div>
+      <li><a href="/proposals.html"><i class="bi bi-lightbulb"></i> Proposals</a></li>
+      <li><a href="/alerts.html"><i class="bi bi-bell"></i> Alerts <span id="alert-badge" class="bdg bdg-red ms-auto" style="display:none"></span></a></li>
+    </ul>
+    <div class="sidebar-footer">v0.2 · read-only</div>
+  </nav>
+
+  <div id="main-content">
+    <div class="content-header">
+      <div><h5>Alerts</h5><p>Models requiring attention — acknowledge via CLI: <code>python -m llm_curator.cli ack &lt;id&gt;</code></p></div>
+      <span id="row-count" class="bdg bdg-gray"></span>
+    </div>
+
+    <div class="content-body">
+      <div class="filters">
+        <label>Severity</label>
+        <select id="f-severity">
+          <option value="">All</option>
+          <option value="critical">Critical</option>
+          <option value="warn">Warning</option>
+          <option value="info">Info</option>
+        </select>
+        <label>
+          <input type="checkbox" id="f-include-acked" class="me-1">
+          Include acknowledged
+        </label>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>Severity</th>
+              <th>Category</th>
+              <th>Model</th>
+              <th>Source</th>
+              <th>Alias</th>
+              <th>Message</th>
+              <th>Date</th>
+              <th>Acked</th>
+            </tr>
+          </thead>
+          <tbody id="alerts-tbody">
+            <tr><td colspan="8" class="loading-state">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-2" style="font-size:0.75rem; color:#94a3b8">
+        <i class="bi bi-info-circle me-1"></i>
+        Read-only in v0.2. To acknowledge: <code>docker compose run --rm curator python -m llm_curator.cli ack &lt;id&gt; --note "your note"</code>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/app.js"></script>
+<script>
+let allAlerts = [];
+
+function applyFilters() {
+  const sev = document.getElementById('f-severity').value;
+  let rows = allAlerts;
+  if (sev) rows = rows.filter(r => r.severity === sev);
+  document.getElementById('row-count').textContent = `${rows.length} alerts`;
+  renderTable('alerts-tbody', rows, [
+    r => severityBadge(r.severity),
+    r => `<span class="bdg bdg-gray" style="font-size:0.65rem">${r.category}</span>`,
+    r => r.model_id ? `<span class="mono" style="font-size:0.78rem">${r.model_id}</span>` : '—',
+    r => r.source ? `<span class="bdg bdg-gray">${r.source}</span>` : '—',
+    r => r.litellm_alias ? `<span class="mono" style="font-size:0.78rem">${r.litellm_alias}</span>` : '—',
+    r => `<span style="font-size:0.8rem">${r.message}</span>`,
+    r => fmtDate(r.generated_at),
+    r => r.acknowledged
+      ? `<span class="bdg bdg-green">acked</span>${r.ack_note ? `<br><span class="s-nil" style="font-size:0.7rem">${r.ack_note}</span>` : ''}`
+      : '<span class="bdg bdg-red">open</span>',
+  ]);
+}
+
+async function load() {
+  const includeAcked = document.getElementById('f-include-acked').checked;
+  try {
+    allAlerts = await api(`/api/alerts/?include_acked=${includeAcked}&limit=200`);
+    applyFilters();
+  } catch (err) {
+    document.getElementById('alerts-tbody').innerHTML =
+      `<tr><td colspan="8" class="empty-state text-danger">Error: ${err.message}</td></tr>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('f-severity').addEventListener('change', applyFilters);
+  document.getElementById('f-include-acked').addEventListener('change', load);
+  load();
+});
+</script>
+</body>
+</html>
