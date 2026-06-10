@@ -3,8 +3,24 @@ PYTHONPATH=/app
 PYTHONUNBUFFERED=1
 
 # min  hour  dom  mon  dow  user  command
-# /run_job.sh sources /etc/environment so cron jobs see CSR_DSN, API keys, etc.
-37  2  * * *  root  /run_job.sh python -m llm_curator.eval_runner >> /proc/1/fd/1 2>&1
-17  3  * * *  root  /run_job.sh python -m llm_curator.openrouter_discovery >> /proc/1/fd/1 2>&1
-43  3  * * *  root  /run_job.sh python -m llm_curator.ollama_cloud_discovery >> /proc/1/fd/1 2>&1
-23  9  * * 0  root  /run_job.sh python -m llm_curator.proposal_generator >> /proc/1/fd/1 2>&1
+# /run_job.sh sources /etc/environment so cron jobs see DATABASE_URL, API keys, etc.
+#
+# Semantic order: discovery → pricing → eval → proposals
+# All times IST (TZ=Asia/Kolkata). Previously odd times (02:37, 03:17, 03:43)
+# were inherited from the host app to avoid job conflicts — no longer needed.
+#
+# 1. Discovery: refresh registry before anything else reads it
+ 0  2  * * *  root  /run_job.sh python -m llm_curator.openrouter_discovery >> /proc/1/fd/1 2>&1
+30  2  * * *  root  /run_job.sh python -m llm_curator.ollama_cloud_discovery >> /proc/1/fd/1 2>&1
+#
+# 2. Pricing: update prices after discovery has refreshed the model list
+ 0  3  * * *  root  /run_job.sh python -m llm_curator.price_scraper >> /proc/1/fd/1 2>&1
+#
+# 3. Eval runner: twice daily (every 12 hours) → 2 models/day
+#    04:00 run sees fresh discovery + pricing data from the same morning.
+#    16:00 run picks the next model in rotation (different from the 04:00 model).
+ 0  4  * * *  root  /run_job.sh python -m llm_curator.eval_runner >> /proc/1/fd/1 2>&1
+ 0 16  * * *  root  /run_job.sh python -m llm_curator.eval_runner >> /proc/1/fd/1 2>&1
+#
+# 4. Proposals: weekly on Sunday morning, after a full week of evals
+ 0  9  * * 0  root  /run_job.sh python -m llm_curator.proposal_generator >> /proc/1/fd/1 2>&1

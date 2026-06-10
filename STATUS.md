@@ -5,9 +5,7 @@
 
 ---
 
-## Current Version: v0.1 (baseline)
-
-Extracted from a private internal application. Standalone service, own Postgres, own scheduler.
+## Current Version: v0.4
 
 ---
 
@@ -40,7 +38,7 @@ Extracted from a private internal application. Standalone service, own Postgres,
 ### CLI
 - [x] `stats`, `leaderboard`, `proposals`, `alerts`, `ack` commands via `python -m llm_curator.cli`
 
-### Scheduling (inherited from host app — to be revisited in v0.2)
+### Scheduling (inherited from host app)
 - [x] Eval runner: daily 02:37 IST
 - [x] OpenRouter discovery: daily 03:17 IST
 - [x] Ollama Cloud discovery: daily 03:43 IST
@@ -48,51 +46,101 @@ Extracted from a private internal application. Standalone service, own Postgres,
 
 ---
 
-## v0.2 — Proposed
+## v0.2 — Completed
 
 ### Architecture & Documentation
-- [ ] `docs/ARCHITECTURE.md` — harness overview, components, data flow (created in v0.2)
-- [ ] `STATUS.md` (this file) — maintained going forward
-- [ ] `DEVLOG.md` — chronological development decisions log
-- [ ] `llms/<source>/<model>.md` — per-model eval report files with standardised template
-- [ ] Move `CURATOR_INTERNALS.md` into `docs/`
-
-### Pricing Scraper (new container)
-- [ ] New `price-scraper` container that crawls official provider pricing pages
-- [ ] Updates `pricing_input` / `pricing_output` in `llm_registry` on a schedule
-- [ ] Targets: OpenRouter pricing page, Ollama Cloud, Mistral, Deepseek, Google AI Studio
-- [ ] Triggers alert if pricing changes for an in-use model
+- [x] `docs/ARCHITECTURE.md` — harness overview, containers, DB schema, data flow
+- [x] `STATUS.md` (this file) — maintained going forward
+- [x] `DEVLOG.md` — chronological development decisions log
 
 ### Evaluation Improvements
-- [ ] Research-backed grader upgrade (from Gemini Deep Research output in `docs/research/`)
-- [ ] Add `grader_version` column to `llm_evals` table (migration `05_grader_version.sql`)
-- [ ] Monthly grader versioning cycle — new graders get a version bump, old scores preserved
-- [ ] LLM-written narrative report per model — generated after each eval run, stored as `llms/<source>/<model>.md`
-- [ ] Tiered eval depth: light (2 prompts) for discovery, full suite for routing candidates
+- [x] Research-backed grader upgrade — `grade_sympy`, `grade_json_doc`, `grade_quasi_exact`, `grade_ifeval_rougek`
+- [x] `grader_version` column on `llm_evals` (migration `05_grader_version.sql`); `GRADER_VERSION = "v2"`
+- [x] Sources: HELM (arXiv:2211.09110), JSONSchemaBench, IFEval (arXiv:2311.07911), ROUGE-K
 
-### Provider Extensibility
-- [ ] Formal provider adapter interface — `discover()` + `call()` contract
-- [ ] Support paid models from OpenRouter with per-model cost cap overrides
-- [ ] Design for community-contributed provider adapters (beyond OpenRouter + Ollama)
+### Dashboard
+- [x] `ui` container — FastAPI + plain HTML read-only dashboard (port 8088)
+- [x] 5 pages: Dashboard, Registry, Leaderboard, Proposals, Alerts
 
-### Scheduling (standalone cleanup)
-- [ ] Revisit cron schedule now that odd-hours avoidance (host app conflict) no longer applies
-- [ ] Consider running discovery more frequently for newly added sources
-
-### Host Router Integration (output side)
-- [ ] Structured JSON/YAML export from proposal generator for LiteLLM to consume
-- [ ] Host router reads `llms/<source>/<model>.md` reports + proposal JSON weekly to update routing
+### Hygiene
+- [x] All PARCON references removed; fully standalone public repo
+- [x] DB user corrected to `parcon` (curator_user never applied to existing volume)
 
 ---
 
-## v0.3 — Ideas (not yet scoped)
+## v0.3 — In Progress
 
-- [ ] Public leaderboard web UI
-- [ ] Community result submission (standardised schema + provenance fields)
-- [ ] Multi-region latency benchmarking
-- [ ] Tool-use eval prompts (function calling quality)
-- [ ] n8n workflow (deferred — lean Python scripts preferred for now)
+All items below are v0.3 scope. Items 2–5 were originally proposed in v0.2 but deferred.
+
+### 1. Tool Use Grader (5th use case) — NEW
+- [x] Migration `06_tool_use.sql` — adds `tool_use` to `use_case` CHECK constraint
+- [x] `call_with_tools()` in `eval_providers.py` — OpenRouter function-calling API format
+- [x] `grade_tool_call()` grader — BFCL-inspired deterministic JSON comparison; `GRADER_VERSION = "v3"`
+- [x] 5 canary prompts: simple, distractor, abstain, schema-strict, implicit-args
+- [x] `eval_runner.py` — routes `tool_use` prompts to `call_with_tools()`; Ollama short-circuits with error
+
+### 2. Formal Provider Adapter Interface — CARRIED FROM v0.2
+- [x] `ProviderAdapter` Protocol in `eval_providers.py` — typed contract for `call()` + `call_with_tools()`
+- [x] `ToolCallResult` dataclass with `.to_call_result()` bridge
+- [x] `ADAPTER_SOURCES` registry; new providers plug in without touching eval logic
+
+### 3. Pricing Scraper — CARRIED FROM v0.2
+- [x] `price_scraper.py` — fetches current pricing from OpenRouter `/api/v1/models`
+- [x] Diffs against `llm_registry.pricing_input / pricing_output`; raises `llm_alerts` on >5% change for `in_litellm` models
+- [x] Stubs for Mistral, Deepseek, Google AI Studio (graceful degradation)
+- [ ] Schedule wiring (pending Item 6 — schedule rationalisation)
+
+### 4. Paid Model Eval Support — CARRIED FROM v0.2
+- [x] Migration `07_eval_tiers.sql` — adds `eval_cost_cap_usd` to `llm_registry`
+- [x] Tiered eval depth: light (2 prompts) for never-evaluated models; full suite otherwise
+- [x] Per-model cost cap override; rotation picker includes paid models with explicit cap set
+
+### 5. Schedule Rationalisation — CARRIED FROM v0.2
+- [x] Fixed ordering bug: discovery now runs before eval runner (was inverted)
+- [x] Added price scraper slot between discovery and eval
+- [x] Eval runner runs twice daily (04:00 + 16:00 IST) — 2 models/day
+- [x] All times rounded to clean IST hours; odd inherited times removed
+- [x] New schedule: 02:00 discovery → 02:30 Ollama → 03:00 pricing → 04:00/16:00 eval → Sun 09:00 proposals
 
 ---
 
-*Last updated: 2026-06-03 | Maintainer: Sriram*
+---
+
+## v0.4 — Completed
+
+Two new deterministic graders + end-to-end wiring (leaderboard, migration, UI).
+
+### 1. grade_struct_data — StructEval (TMLR 2025)
+- [x] Two-stage: syntax_ok (0.40) + key_validation (0.60)
+- [x] Formats: YAML (`yaml.safe_load`), XML (`xml.etree.ElementTree`), CSV (`csv.DictReader`)
+- [x] Dot-path traversal for nested keys (`services.web.image`)
+- [x] 3 prompts: `struct_yaml_config`, `struct_xml_record`, `struct_csv_report`
+
+### 2. grade_code_exec — CRUXEval (arXiv:2401.03065)
+- [x] Strips markdown fences, builds test harness, runs via `subprocess` (5s timeout)
+- [x] Score = passed_cases / total_cases
+- [x] Runs inside existing curator container — no extra infrastructure
+- [x] 3 prompts: `code_list_filter`, `code_string_reverse`, `code_fizzbuzz`
+
+### 3. Infrastructure
+- [x] `GRADER_VERSION = "v4"` (v3 scores preserved in DB)
+- [x] `migrations/09_v4_use_cases.sql` — extends CHECK constraint with `structured_data`, `code_exec`
+- [x] `leaderboard.py` — adds `tool_use`, `structured_data`, `code_exec` columns; default version → v4
+- [x] `leaderboard.html` — 3 new columns, version filter updated to v4
+- [x] `db.py` — fixed idle-in-transaction bug: `cursor()` now a proper context manager (commit/rollback)
+- [x] Migrations 06 + 07 applied to live DB (were missing, causing eval_runner crash since v0.3 deploy)
+
+---
+
+## Deferred (post-v0.4)
+
+- UI redesign ("Claude Design" — full visual refresh)
+- LLM-written narrative reports per model (`llms/<source>/<model>.md`)
+- Public leaderboard web UI
+- Community result submission (standardised schema + provenance)
+- Multi-region latency benchmarking
+- Host router structured JSON/YAML export
+
+---
+
+*Last updated: 2026-06-10 | Maintainer: Sriram*

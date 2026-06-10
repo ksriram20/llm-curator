@@ -10,7 +10,7 @@ router = APIRouter()
 
 @router.get("/")
 def get_leaderboard(
-    grader_version: str = Query("v2"),
+    grader_version: str = Query("v4"),
     limit: int = Query(50, le=500),
 ) -> list[dict]:
     with cursor() as cur:
@@ -37,6 +37,15 @@ def get_leaderboard(
                 ROUND(AVG(e.score) FILTER (
                     WHERE e.use_case = 'summarization' AND e.score IS NOT NULL)::NUMERIC, 3)
                     AS summarization,
+                ROUND(AVG(e.score) FILTER (
+                    WHERE e.use_case = 'tool_use' AND e.score IS NOT NULL)::NUMERIC, 3)
+                    AS tool_use,
+                ROUND(AVG(e.score) FILTER (
+                    WHERE e.use_case = 'structured_data' AND e.score IS NOT NULL)::NUMERIC, 3)
+                    AS structured_data,
+                ROUND(AVG(e.score) FILTER (
+                    WHERE e.use_case = 'code_exec' AND e.score IS NOT NULL)::NUMERIC, 3)
+                    AS code_exec,
                 COUNT(e.id)        AS n_evals,
                 MAX(e.tested_at)   AS last_tested,
                 ROUND(AVG(e.latency_ms) FILTER (WHERE e.latency_ms IS NOT NULL)::NUMERIC)

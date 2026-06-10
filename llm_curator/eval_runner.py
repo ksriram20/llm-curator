@@ -3,15 +3,26 @@ in eval_prompts.PROMPTS, grades each, writes rows to llm_evals, updates
 llm_registry.last_evaluated_at.
 
 Rotation rules:
-  1. Free models only (is_free=TRUE) — safety net against burning paid budget.
-     Override with --include-paid (CLI/manual only; never from systemd timer).
+  1. Free models only (is_free=TRUE) by default — safety net against paid budget.
+     Paid models with eval_cost_cap_usd set are included automatically.
+     Override with --include-paid (CLI/manual only; never from the cron timer).
   2. Skip deprecated models.
   3. Order: NULL last_evaluated_at first (never tested), then oldest tested.
   4. One model per invocation. Daily timer = one model per day.
 
 Cost safety:
-  - HARD_COST_CAP_USD = 0.10 per run. Refuses to evaluate any single model
-    whose pricing × full-suite estimate exceeds this cap.
+  - HARD_COST_CAP_USD = 0.10 per run (global default).
+  - Per-model override: llm_registry.eval_cost_cap_usd (NULL = use global default).
+  - Refuses to evaluate any model whose projected cost exceeds its effective cap.
+
+Tiered eval depth:
+  - Light suite (LIGHT_SUITE_IDS): 2 prompts for never-evaluated models.
+    Quick capability check on first encounter; avoids burning tokens on bad models.
+  - Full suite: all prompts for models with prior eval history.
+
+Tool use prompts:
+  - Routed to call_with_tools() instead of call().
+  - Skipped (error recorded) for non-OpenRouter sources.
 
 Manual run:
   python -m llm_curator.eval_runner                 # next-due free model
@@ -29,7 +40,7 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from llm_curator.db import cursor, get_conn  # noqa: E402
 from llm_curator.eval_prompts import PROMPTS, GRADER_VERSION  # noqa: E402
-from llm_curator.eval_providers import call, estimate_cost_usd  # noqa: E402
+from llm_curator.eval_providers import call, call_with_tools, CallResult, estimate_cost_usd  # noqa: E402
 from llm_curator.policy import is_eval_eligible  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "brain"))
@@ -45,7 +56,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger("eval_runner")
 
-HARD_COST_CAP_USD = 0.10  # per single-model eval run
+HARD_COST_CAP_USD = 0.10  # global default cap per single-model eval run
+
+# Light-tier prompt IDs: run for never-evaluated models (last_evaluated_at IS NULL).
+# One reasoning + one classification — fast, cheap, broad signal.
+LIGHT_SUITE_IDS: frozenset[str] = frozenset({"reasoning_widgets", "classification_sentiment"})
+
+
+# ── Tier / cap helpers ──────────────────────────────────────────────────────
+
+
+def select_prompts(model: dict[str, Any]) -> list[dict[str, Any]]:
+    """Light suite for first-run models; full suite for all others."""
+    if model.get("last_evaluated_at") is None:
+        light = [p for p in PROMPTS if p["id"] in LIGHT_SUITE_IDS]
+        return light if light else PROMPTS[:2]
+    return PROMPTS
+
+
+def cost_cap_for(model: dict[str, Any]) -> float:
+    """Effective cost cap: per-model override or global default."""
+    cap = model.get("eval_cost_cap_usd")
+    return float(cap) if cap is not None else HARD_COST_CAP_USD
 
 
 # ── Picker ─────────────────────────────────────────────────────────────────
@@ -60,10 +92,13 @@ def pick_next_model(include_paid: bool = False) -> dict[str, Any] | None:
     """
     where = ["deprecated = FALSE"]
     if not include_paid:
-        where.append("is_free = TRUE")
+        # Paid models with an explicit cost cap are included automatically;
+        # all other paid models require --include-paid.
+        where.append("(is_free = TRUE OR eval_cost_cap_usd IS NOT NULL)")
     sql = f"""
         SELECT id, model_id, source, provider, is_free, in_litellm,
-               pricing_input, pricing_output, last_evaluated_at
+               pricing_input, pricing_output, last_evaluated_at,
+               eval_cost_cap_usd
         FROM llm_registry
         WHERE {' AND '.join(where)}
         ORDER BY last_evaluated_at NULLS FIRST, last_seen DESC
@@ -98,15 +133,15 @@ def find_model(model_id: str, source: str | None = None) -> dict[str, Any] | Non
 # ── Cost guardrail ─────────────────────────────────────────────────────────
 
 
-def projected_cost(model: dict[str, Any]) -> float | None:
-    """Worst-case projection: assume max_tokens output for every prompt."""
+def projected_cost(model: dict[str, Any], prompts: list[dict[str, Any]]) -> float | None:
+    """Worst-case projection: assume max_tokens output for every prompt in the suite."""
     p_in = model.get("pricing_input")
     p_out = model.get("pricing_output")
     if p_in is None or p_out is None:
         return None
     # Rough estimate: 1500 tokens total input across all prompts + 512 output each
     est_input = 1500
-    est_output = 512 * len(PROMPTS)
+    est_output = 512 * len(prompts)
     return float(p_in) * est_input + float(p_out) * est_output
 
 
@@ -159,15 +194,20 @@ def touch_last_evaluated(model_id_pk: int) -> None:
 
 
 def evaluate_one(model: dict[str, Any]) -> dict[str, Any]:
-    """Run every prompt against one model, persist results, return summary."""
+    """Run the appropriate prompt suite against one model, persist results, return summary."""
     model_pk = model["id"]
     model_id = model["model_id"]
     source = model["source"]
-    logger.info("Evaluating %s [%s] ...", model_id, source)
 
-    proj = projected_cost(model)
-    if proj is not None and proj > HARD_COST_CAP_USD:
-        msg = (f"Projected cost ${proj:.4f} exceeds cap ${HARD_COST_CAP_USD:.4f} — "
+    prompts = select_prompts(model)
+    cap = cost_cap_for(model)
+    tier = "light" if model.get("last_evaluated_at") is None else "full"
+    logger.info("Evaluating %s [%s] — %s suite (%d prompts), cap=$%.2f",
+                model_id, source, tier, len(prompts), cap)
+
+    proj = projected_cost(model, prompts)
+    if proj is not None and proj > cap:
+        msg = (f"Projected cost ${proj:.4f} exceeds cap ${cap:.4f} — "
                f"skipping {model_id}")
         logger.warning(msg)
         return {"model": model_id, "skipped": True, "reason": msg}
@@ -175,6 +215,7 @@ def evaluate_one(model: dict[str, Any]) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "model": model_id,
         "source": source,
+        "tier": tier,
         "skipped": False,
         "prompts_run": 0,
         "prompts_failed": 0,
@@ -182,8 +223,20 @@ def evaluate_one(model: dict[str, Any]) -> dict[str, Any]:
         "scores": {},
     }
 
-    for prompt in PROMPTS:
-        result = call(model_id, source, prompt["user"], prompt.get("system"))
+    for prompt in prompts:
+        # tool_use prompts use the function-calling API; all others use plain chat.
+        if prompt["use_case"] == "tool_use":
+            if source != "openrouter":
+                result = CallResult(
+                    "", None, None, 0,
+                    error=f"tool_use_unsupported: source '{source}' does not support function calling",
+                )
+            else:
+                tool_result = call_with_tools(model_id, source, prompt["user"], prompt["tools"])
+                result = tool_result.to_call_result()
+        else:
+            result = call(model_id, source, prompt["user"], prompt.get("system"))
+
         cost = estimate_cost_usd(
             model.get("pricing_input"), model.get("pricing_output"),
             result.tokens_input, result.tokens_output,

@@ -21,8 +21,10 @@
       <div class="sidebar-section">Monitor</div>
       <li><a href="/proposals.html"><i class="bi bi-lightbulb"></i> Proposals</a></li>
       <li><a href="/alerts.html"><i class="bi bi-bell"></i> Alerts <span id="alert-badge" class="bdg bdg-red ms-auto" style="display:none"></span></a></li>
+      <div class="sidebar-section">Configure</div>
+      <li><a href="/settings.html"><i class="bi bi-gear"></i> Settings</a></li>
     </ul>
-    <div class="sidebar-footer">v0.2 · read-only</div>
+    <div class="sidebar-footer">v0.4</div>
   </nav>
 
   <div id="main-content">
@@ -35,7 +37,9 @@
       <div class="filters">
         <label>Grader version</label>
         <select id="f-version">
-          <option value="v2">v2 (current)</option>
+          <option value="v4">v4 (current)</option>
+          <option value="v3">v3</option>
+          <option value="v2">v2</option>
           <option value="v1">v1 (baseline)</option>
         </select>
         <label>Show</label>
@@ -65,12 +69,15 @@
               <th>Extraction</th>
               <th>Classification</th>
               <th>Summarization</th>
+              <th>Tool Use</th>
+              <th>Struct Data</th>
+              <th>Code</th>
               <th>Latency</th>
               <th>Last tested</th>
             </tr>
           </thead>
           <tbody id="lb-tbody">
-            <tr><td colspan="11" class="loading-state">Loading…</td></tr>
+            <tr><td colspan="14" class="loading-state">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -99,6 +106,9 @@ function applyFilters() {
     r => fmtScore(r.extraction),
     r => fmtScore(r.classification),
     r => fmtScore(r.summarization),
+    r => fmtScore(r.tool_use),
+    r => fmtScore(r.structured_data),
+    r => fmtScore(r.code_exec),
     r => fmtLatency(r.avg_latency_ms),
     r => fmtDate(r.last_tested),
   ]);
@@ -108,7 +118,7 @@ async function load() {
   const version = document.getElementById('f-version').value;
   const limit   = document.getElementById('f-limit').value;
   document.getElementById('lb-tbody').innerHTML =
-    '<tr><td colspan="11" class="loading-state">Loading…</td></tr>';
+    '<tr><td colspan="14" class="loading-state">Loading…</td></tr>';
   try {
     allRows = await api(`/api/leaderboard/?grader_version=${version}&limit=${limit}`);
     // Inject index for rank column
@@ -116,7 +126,7 @@ async function load() {
     applyFilters();
   } catch (err) {
     document.getElementById('lb-tbody').innerHTML =
-      `<tr><td colspan="11" class="empty-state text-danger">Error: ${err.message}</td></tr>`;
+      `<tr><td colspan="14" class="empty-state text-danger">Error: ${err.message}</td></tr>`;
   }
 }
 

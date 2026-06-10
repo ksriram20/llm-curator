@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import contextmanager
 from typing import Optional
 
 import psycopg2
@@ -37,6 +38,16 @@ def get_conn() -> psycopg2.extensions.connection:
     return _conn
 
 
+@contextmanager
 def cursor():
-    """Return a RealDictCursor (rows behave like dicts)."""
-    return get_conn().cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    """Context manager yielding a RealDictCursor; commits on success, rolls back on error."""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        yield cur
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()

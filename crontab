@@ -1,7 +1,10 @@
-# llm-curator schedule (supercronic) — mirrors the original PARCON systemd timers.
-# Container TZ is set to Asia/Kolkata in docker-compose.yml so these match IST.
-# min hour dom mon dow   command
-17 3 * * *   python -m llm_curator.openrouter_discovery
-43 3 * * *   python -m llm_curator.ollama_cloud_discovery
-37 2 * * *   python -m llm_curator.eval_runner
-23 9 * * 0   python -m llm_curator.proposal_generator
+# llm-curator schedule — reference copy of crontab.system (supercronic format).
+# Container TZ=Asia/Kolkata (set in docker-compose.yml), so all times are IST.
+# The active file installed in the container is crontab.system.
+# min  hour  dom  mon  dow   command
+ 0  2  * * *   python -m llm_curator.openrouter_discovery
+30  2  * * *   python -m llm_curator.ollama_cloud_discovery
+ 0  3  * * *   python -m llm_curator.price_scraper
+ 0  4  * * *   python -m llm_curator.eval_runner
+ 0 16  * * *   python -m llm_curator.eval_runner
+ 0  9  * * 0   python -m llm_curator.proposal_generator

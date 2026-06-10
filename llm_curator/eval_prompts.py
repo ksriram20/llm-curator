@@ -10,12 +10,16 @@ Design rules:
 Schema per prompt:
   {
     "id":       unique short slug (also goes into llm_evals.eval_name)
-    "use_case": one of {reasoning, extraction, classification, summarization}
-    "system":   optional system prompt (None to skip)
+    "use_case": one of {reasoning, extraction, classification, summarization, tool_use, structured_data, code_exec}
+    "system":   optional system prompt (None to skip; not used for tool_use)
     "user":     user message text
     "expected": reference answer / constraint spec (JSON string or plain string)
     "grader":   callable (output_text, expected) -> float in [0.0, 1.0]
+    "tools":    list of tool schemas (REQUIRED for tool_use; omit for all others)
   }
+
+  tool_use prompts are sent via call_with_tools() in eval_runner, not call().
+  The grader receives output as JSON: {"name": "fn_name", "arguments": {...}}.
 
 Grader versions
   v1 — grade_integer, grade_json_keys, grade_exact, grade_length  (baseline)
@@ -23,6 +27,11 @@ Grader versions
          Sources: HELM (arXiv:2211.09110), JSONSchemaBench (arXiv:2501.10868),
                   LLMStructBench (arXiv:2602.14743), IFEval (arXiv:2311.07911),
                   ROUGE-K (arXiv:2403.05186), GSM-Symbolic (arXiv:2410.05229)
+  v3 — adds grade_tool_call
+         Source: BFCL (arXiv:2504.00914) — AST/JSON comparison for function calling
+  v4 — adds grade_struct_data, grade_code_exec
+         Sources: StructEval (TMLR 2025) — YAML/XML/CSV syntax + dot-path validation
+                  CRUXEval (arXiv:2401.03065) — subprocess execution, score = passed/total
 """
 from __future__ import annotations
 
@@ -32,7 +41,7 @@ from typing import Any, Callable
 
 # Bumped when grader logic changes. Stored in llm_evals.grader_version.
 # Old rows with prior version strings remain valid for historical comparison.
-GRADER_VERSION = "v2"
+GRADER_VERSION = "v4"
 
 
 # ── v1 graders (kept for reference / backwards compat) ────────────────────
@@ -294,6 +303,248 @@ def grade_ifeval_rougek(output: str, expected: str) -> float:
     return round(0.5 * constraint_score + 0.5 * keyword_score, 4)
 
 
+# ── v3 graders ─────────────────────────────────────────────────────────────
+
+def grade_tool_call(output: str, expected: str) -> float:
+    """v3 — BFCL-inspired deterministic tool-call grader (arXiv:2504.00914).
+
+    output:   JSON string from call_with_tools() — {"name": "...", "arguments": {...}}
+              Empty string when the model produced no tool call.
+    expected: JSON string — {"function": "name", "arguments": {...}, "required_exact": [...]}
+              required_exact: keys whose values must match exactly (case-insensitive string).
+
+    Score components:
+      0.40 — function name match (binary)
+      0.20 — required argument keys present (fraction of exp_args keys found)
+      0.20 — argument type correctness (fraction matching declared Python type)
+      0.20 — exact value match for required_exact keys (fraction)
+    """
+    try:
+        exp = json.loads(expected)
+        exp_fn: str = exp.get("function", "")
+        exp_args: dict = exp.get("arguments", {})
+        required_exact: list = exp.get("required_exact", [])
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return 0.0
+
+    if not output:
+        return 0.0
+
+    try:
+        got = json.loads(output)
+        got_fn: str = got.get("name", "")
+        raw_args = got.get("arguments", {})
+        got_args: dict = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return 0.0
+
+    # Component 1: function name (0.40)
+    fn_score = 1.0 if got_fn == exp_fn else 0.0
+
+    # Component 2: required args present (0.20)
+    if exp_args:
+        args_present_score = sum(1 for k in exp_args if k in got_args) / len(exp_args)
+    else:
+        args_present_score = 1.0
+
+    # Component 3: type correctness (0.20)
+    # bool must be checked before int (bool is subclass of int in Python)
+    if exp_args:
+        type_hits = 0
+        for k, v in exp_args.items():
+            got_v = got_args.get(k)
+            if got_v is None:
+                continue
+            if isinstance(v, bool):
+                type_hits += 1 if isinstance(got_v, bool) else 0
+            elif isinstance(v, (int, float)):
+                type_hits += 1 if isinstance(got_v, (int, float)) and not isinstance(got_v, bool) else 0
+            elif type(v) is type(got_v):
+                type_hits += 1
+        type_score = type_hits / len(exp_args)
+    else:
+        type_score = 1.0
+
+    # Component 4: exact value match for required_exact keys (0.20)
+    if required_exact:
+        exact_hits = sum(
+            1 for k in required_exact
+            if str(got_args.get(k, "")).strip().lower() == str(exp_args.get(k, "")).strip().lower()
+        )
+        value_score = exact_hits / len(required_exact)
+    else:
+        value_score = 1.0
+
+    return round(0.40 * fn_score + 0.20 * args_present_score + 0.20 * type_score + 0.20 * value_score, 4)
+
+
+# ── v4 graders ─────────────────────────────────────────────────────────────
+
+def grade_struct_data(output: str, expected: str) -> float:
+    """v4 — StructEval-inspired structured-output grader (TMLR 2025).
+
+    Two stages:
+      syntax_ok      (0.40) — parse succeeds for the declared format
+      key_validation (0.60) — dot-path keys present + required_values match
+
+    expected: JSON string — {
+        "format": "yaml" | "xml" | "csv",
+        "required_keys":   ["services.web"],     # dot-path presence check
+        "required_values": {"name": "myapp"}     # leaf exact-match check
+    }
+    """
+    import csv as _csv
+    import io
+
+    try:
+        spec = json.loads(expected)
+        fmt: str = spec.get("format", "yaml").lower()
+        req_keys: list = spec.get("required_keys", [])
+        req_vals: dict = spec.get("required_values", {})
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return 0.0
+
+    # Strip markdown fences
+    text = output.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-z]*\n?", "", text)
+        text = re.sub(r"\n?```\s*$", "", text)
+    text = text.strip()
+
+    # Stage 1: syntax
+    syntax_ok = 0.0
+    obj: Any = None
+    try:
+        if fmt == "yaml":
+            import yaml  # type: ignore
+            obj = yaml.safe_load(text)
+            syntax_ok = 1.0 if isinstance(obj, dict) else 0.0
+        elif fmt == "xml":
+            import xml.etree.ElementTree as ET
+            obj = ET.fromstring(text)
+            syntax_ok = 1.0
+        elif fmt == "csv":
+            rdr = _csv.DictReader(io.StringIO(text))
+            rows = list(rdr)
+            obj = {"fields": list(rdr.fieldnames or []), "rows": rows}
+            syntax_ok = 1.0 if obj["fields"] else 0.0
+    except Exception:
+        pass
+
+    if syntax_ok == 0.0 or obj is None:
+        return 0.0
+
+    # Stage 2: dot-path helpers
+    def _yaml_get(node: Any, path: str) -> Any:
+        for part in path.split("."):
+            if not isinstance(node, dict):
+                return None
+            node = node.get(part)
+        return node
+
+    def _xml_get(root: Any, path: str) -> Any:
+        import xml.etree.ElementTree as ET  # noqa: F811
+        cur = root
+        for part in path.split(".")[1:]:  # skip root tag name
+            cur = cur.find(part) if cur is not None else None
+        return cur.text if cur is not None else None
+
+    total = len(req_keys) + len(req_vals)
+    if total == 0:
+        return round(0.40 * syntax_ok + 0.60, 4)
+
+    hits = 0.0
+    if fmt == "yaml":
+        hits += sum(1 for k in req_keys if _yaml_get(obj, k) is not None)
+        hits += sum(
+            1 for k, v in req_vals.items()
+            if str(_yaml_get(obj, k) or "").strip().lower() == str(v).strip().lower()
+        )
+    elif fmt == "xml":
+        hits += sum(1 for k in req_keys if _xml_get(obj, k) is not None)
+        hits += sum(
+            1 for k, v in req_vals.items()
+            if str(_xml_get(obj, k) or "").strip().lower() == str(v).strip().lower()
+        )
+    elif fmt == "csv":
+        fields = obj["fields"]
+        rows = obj["rows"]
+        hits += sum(1 for k in req_keys if k in fields)
+        hits += sum(
+            1 for k, v in req_vals.items()
+            if any(str(r.get(k, "")).strip().lower() == str(v).strip().lower() for r in rows)
+        )
+
+    return round(0.40 * syntax_ok + 0.60 * (hits / total), 4)
+
+
+def grade_code_exec(output: str, expected: str) -> float:
+    """v4 — CRUXEval-inspired code-execution grader (arXiv:2401.03065).
+
+    Extracts the named function from LLM output, builds a test harness,
+    and runs it via subprocess with a 5-second timeout.
+    Score = passed_cases / total_cases.
+
+    expected: JSON string — {
+        "fn_name": "solve",
+        "cases": [{"args": [5], "expected": 55}]
+    }
+
+    Runs inside the curator container — no extra infrastructure needed.
+    Prompts are hand-crafted so arbitrary-code risk is accepted by design.
+    """
+    import subprocess
+    import sys as _sys
+
+    try:
+        spec = json.loads(expected)
+        fn_name: str = spec.get("fn_name", "")
+        cases: list = spec.get("cases", [])
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return 0.0
+
+    if not fn_name or not cases:
+        return 0.0
+
+    # Strip markdown fences
+    code = output.strip()
+    if code.startswith("```"):
+        code = re.sub(r"^```[a-z]*\n?", "", code)
+        code = re.sub(r"\n?```\s*$", "", code)
+    code = code.strip()
+
+    if not code:
+        return 0.0
+
+    # Build test harness
+    lines = [code, "", "_p = 0", "_t = 0"]
+    for case in cases:
+        args_r = ", ".join(repr(a) for a in case.get("args", []))
+        exp_r = repr(case.get("expected"))
+        lines += [
+            "_t += 1",
+            "try:",
+            f"    _r = {fn_name}({args_r})",
+            f"    if _r == {exp_r}: _p += 1",
+            "except Exception: pass",
+        ]
+    lines.append("print(f'{_p}/{_t}')")
+
+    try:
+        result = subprocess.run(
+            [_sys.executable, "-c", "\n".join(lines)],
+            capture_output=True, text=True, timeout=5,
+        )
+        out = result.stdout.strip()
+        if "/" in out:
+            p, t = out.split("/", 1)
+            return round(int(p) / max(int(t), 1), 4)
+    except Exception:
+        pass
+
+    return 0.0
+
+
 # ── Public helpers ─────────────────────────────────────────────────────────
 
 def list_graders() -> dict[str, Callable]:
@@ -310,6 +561,11 @@ def list_graders() -> dict[str, Callable]:
         "grade_json_doc": grade_json_doc,
         "grade_sympy": grade_sympy,
         "grade_ifeval_rougek": grade_ifeval_rougek,
+        # v3
+        "grade_tool_call": grade_tool_call,
+        # v4
+        "grade_struct_data": grade_struct_data,
+        "grade_code_exec": grade_code_exec,
     }
 
 
@@ -412,5 +668,349 @@ PROMPTS: list[dict[str, Any]] = [
             "keywords": ["msme", "gdp", "credit", "treds", "110 million"],
         }),
         "grader": grade_ifeval_rougek,
+    },
+
+    # ── tool_use (v3: grade_tool_call) ────────────────────────────────────
+    # Canary prompts inspired by BFCL failure-mode analysis (arXiv:2504.00914).
+    # Sent via call_with_tools(); grader receives JSON {"name":..., "arguments":...}.
+    # eval_runner skips tool_use prompts for non-OpenRouter sources.
+
+    {
+        # Baseline: single tool, all argument values stated explicitly.
+        "id": "tool_simple",
+        "use_case": "tool_use",
+        "system": None,
+        "user": "What is the current weather in Paris in celsius?",
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "description": "Get current weather for a city.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "city": {"type": "string", "description": "City name"},
+                            "unit": {
+                                "type": "string",
+                                "enum": ["celsius", "fahrenheit"],
+                                "description": "Temperature unit",
+                            },
+                        },
+                        "required": ["city", "unit"],
+                    },
+                },
+            }
+        ],
+        "expected": json.dumps({
+            "function": "get_weather",
+            "arguments": {"city": "Paris", "unit": "celsius"},
+            "required_exact": ["unit"],
+        }),
+        "grader": grade_tool_call,
+    },
+    {
+        # Distractor: three semantically similar tools — model must read descriptions.
+        "id": "tool_distractor",
+        "use_case": "tool_use",
+        "system": None,
+        "user": "A customer named Alice wants to look up her past orders.",
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_products",
+                    "description": "Search the product catalog by keyword.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string"},
+                        },
+                        "required": ["query"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_orders",
+                    "description": "Look up past orders placed by a customer.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "customer_name": {"type": "string"},
+                        },
+                        "required": ["customer_name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_inventory",
+                    "description": "Check current inventory levels for a product SKU.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "sku": {"type": "string"},
+                        },
+                        "required": ["sku"],
+                    },
+                },
+            },
+        ],
+        "expected": json.dumps({
+            "function": "search_orders",
+            "arguments": {"customer_name": "Alice"},
+            "required_exact": ["customer_name"],
+        }),
+        "grader": grade_tool_call,
+    },
+    {
+        # Abstain: no tool fits — model should call no_action, not fabricate a call.
+        "id": "tool_abstain",
+        "use_case": "tool_use",
+        "system": None,
+        "user": "What is your refund policy for electronics purchased online?",
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "book_flight",
+                    "description": "Book a flight between two cities.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "origin": {"type": "string"},
+                            "destination": {"type": "string"},
+                        },
+                        "required": ["origin", "destination"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "check_flight_status",
+                    "description": "Check the status of an existing flight booking.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "booking_id": {"type": "string"},
+                        },
+                        "required": ["booking_id"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "no_action",
+                    "description": (
+                        "Use this when no other tool is relevant to the user's question."
+                    ),
+                    "parameters": {"type": "object", "properties": {}, "required": []},
+                },
+            },
+        ],
+        "expected": json.dumps({
+            "function": "no_action",
+            "arguments": {},
+            "required_exact": [],
+        }),
+        "grader": grade_tool_call,
+    },
+    {
+        # Schema-strict: argument values must satisfy enum + date format constraints.
+        "id": "tool_schema_strict",
+        "use_case": "tool_use",
+        "system": None,
+        "user": "Schedule a high priority appointment for the 15th of March 2025.",
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "create_appointment",
+                    "description": "Create a calendar appointment.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "date": {
+                                "type": "string",
+                                "description": "Appointment date in YYYY-MM-DD format.",
+                            },
+                            "priority": {
+                                "type": "string",
+                                "enum": ["low", "medium", "high"],
+                                "description": "Appointment priority level.",
+                            },
+                        },
+                        "required": ["date", "priority"],
+                    },
+                },
+            }
+        ],
+        "expected": json.dumps({
+            "function": "create_appointment",
+            "arguments": {"date": "2025-03-15", "priority": "high"},
+            "required_exact": ["date", "priority"],
+        }),
+        "grader": grade_tool_call,
+    },
+    {
+        # Implicit args: values must be reasoned from context, not copied verbatim.
+        "id": "tool_implicit_args",
+        "use_case": "tool_use",
+        "system": None,
+        "user": "Move ₹5000 from savings account SA-001 to current account CA-002.",
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "transfer_funds",
+                    "description": "Transfer money between two accounts.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "from_account": {"type": "string"},
+                            "to_account": {"type": "string"},
+                            "amount": {"type": "number"},
+                            "currency": {
+                                "type": "string",
+                                "enum": ["USD", "EUR", "GBP", "INR"],
+                            },
+                        },
+                        "required": ["from_account", "to_account", "amount", "currency"],
+                    },
+                },
+            }
+        ],
+        "expected": json.dumps({
+            "function": "transfer_funds",
+            "arguments": {
+                "from_account": "SA-001",
+                "to_account": "CA-002",
+                "amount": 5000,
+                "currency": "INR",
+            },
+            "required_exact": ["from_account", "to_account", "currency"],
+        }),
+        "grader": grade_tool_call,
+    },
+
+    # ── structured_data (v4: grade_struct_data) ───────────────────────────
+    # StructEval-inspired (TMLR 2025): syntax check + dot-path key validation.
+
+    {
+        "id": "struct_yaml_config",
+        "use_case": "structured_data",
+        "system": "Output ONLY the requested format. No prose, no markdown fences.",
+        "user": (
+            "Write a YAML configuration for a web application with:\n"
+            "- name: myapp\n"
+            "- version: 1.0\n"
+            "- a services section with a 'web' service using image 'nginx' on port 80"
+        ),
+        "expected": json.dumps({
+            "format": "yaml",
+            "required_keys": ["services.web"],
+            "required_values": {"name": "myapp", "services.web.image": "nginx"},
+        }),
+        "grader": grade_struct_data,
+    },
+    {
+        "id": "struct_xml_record",
+        "use_case": "structured_data",
+        "system": "Output ONLY the requested format. No prose, no markdown fences.",
+        "user": (
+            "Write an XML record for an employee:\n"
+            "- name: Jane Smith\n"
+            "- department: Engineering\n"
+            "- salary: 90000\n"
+            "Use <employee> as the root element with child elements for each field."
+        ),
+        "expected": json.dumps({
+            "format": "xml",
+            "required_keys": ["employee.department", "employee.salary"],
+            "required_values": {"employee.name": "Jane Smith"},
+        }),
+        "grader": grade_struct_data,
+    },
+    {
+        "id": "struct_csv_report",
+        "use_case": "structured_data",
+        "system": "Output ONLY the requested format. No prose, no markdown fences.",
+        "user": (
+            "Write a 3-row CSV table of LLM benchmark results with columns: "
+            "model, score, latency_ms. Use realistic model names and values."
+        ),
+        "expected": json.dumps({
+            "format": "csv",
+            "required_keys": ["model", "score", "latency_ms"],
+            "required_values": {},
+        }),
+        "grader": grade_struct_data,
+    },
+
+    # ── code_exec (v4: grade_code_exec) ──────────────────────────────────
+    # CRUXEval-inspired (arXiv:2401.03065): subprocess execution, score = passed/total.
+
+    {
+        "id": "code_list_filter",
+        "use_case": "code_exec",
+        "system": "Return ONLY valid Python code with no prose or markdown fences.",
+        "user": (
+            "Write a Python function named 'solve' that takes a list of numbers and a "
+            "threshold value, and returns a new list of only the numbers strictly "
+            "greater than the threshold, in their original order."
+        ),
+        "expected": json.dumps({
+            "fn_name": "solve",
+            "cases": [
+                {"args": [[1, 5, 3, 8, 2], 4], "expected": [5, 8]},
+                {"args": [[], 0], "expected": []},
+                {"args": [[10, 20, 30], 25], "expected": [30]},
+            ],
+        }),
+        "grader": grade_code_exec,
+    },
+    {
+        "id": "code_string_reverse",
+        "use_case": "code_exec",
+        "system": "Return ONLY valid Python code with no prose or markdown fences.",
+        "user": (
+            "Write a Python function named 'solve' that takes a string of "
+            "space-separated words and returns the words in reversed order joined by spaces."
+        ),
+        "expected": json.dumps({
+            "fn_name": "solve",
+            "cases": [
+                {"args": ["hello world"], "expected": "world hello"},
+                {"args": ["one two three four"], "expected": "four three two one"},
+                {"args": ["single"], "expected": "single"},
+            ],
+        }),
+        "grader": grade_code_exec,
+    },
+    {
+        "id": "code_fizzbuzz",
+        "use_case": "code_exec",
+        "system": "Return ONLY valid Python code with no prose or markdown fences.",
+        "user": (
+            "Write a Python function named 'solve' that takes an integer n and returns "
+            "a list of strings for numbers 1 to n: 'Fizz' if divisible by 3, 'Buzz' if "
+            "divisible by 5, 'FizzBuzz' if divisible by both, otherwise the number as a string."
+        ),
+        "expected": json.dumps({
+            "fn_name": "solve",
+            "cases": [
+                {"args": [5], "expected": ["1", "2", "Fizz", "4", "Buzz"]},
+                {"args": [15], "expected": [
+                    "1", "2", "Fizz", "4", "Buzz", "Fizz", "7", "8", "Fizz",
+                    "Buzz", "11", "Fizz", "13", "14", "FizzBuzz",
+                ]},
+            ],
+        }),
+        "grader": grade_code_exec,
     },
 ]

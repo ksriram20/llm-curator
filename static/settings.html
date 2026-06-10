@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>llm-curator — Settings</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+<div id="app-wrapper">
+
+  <nav id="sidebar">
+    <div class="sidebar-brand">llm-curator<small>evaluation platform</small></div>
+    <ul class="sidebar-nav">
+      <li><a href="/"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+      <div class="sidebar-section">Evaluate</div>
+      <li><a href="/leaderboard.html"><i class="bi bi-trophy"></i> Leaderboard</a></li>
+      <li><a href="/registry.html"><i class="bi bi-database"></i> Registry</a></li>
+      <div class="sidebar-section">Monitor</div>
+      <li><a href="/proposals.html"><i class="bi bi-lightbulb"></i> Proposals</a></li>
+      <li><a href="/alerts.html"><i class="bi bi-bell"></i> Alerts <span id="alert-badge" class="bdg bdg-red ms-auto" style="display:none"></span></a></li>
+      <div class="sidebar-section">Configure</div>
+      <li><a href="/settings.html" class="active"><i class="bi bi-gear"></i> Settings</a></li>
+    </ul>
+    <div class="sidebar-footer">v0.4</div>
+  </nav>
+
+  <div id="main-content">
+    <div class="content-header">
+      <div>
+        <h5>Settings</h5>
+        <p>Configure provider API keys — stored in the database, env vars used as fallback</p>
+      </div>
+    </div>
+
+    <div class="content-body">
+
+      <!-- Default providers -->
+      <div class="settings-section-label">Default Providers</div>
+      <div class="row g-3 mb-2">
+
+        <!-- OpenRouter -->
+        <div class="col-md-6">
+          <div class="panel">
+            <div class="panel-header">
+              <span><i class="bi bi-box-arrow-in-right me-1"></i>OpenRouter</span>
+              <span id="status-openrouter" class="provider-status s-nil">checking…</span>
+            </div>
+            <div class="panel-body">
+              <p class="provider-desc">Unified gateway to 300+ models. <a href="https://openrouter.ai/settings/keys" target="_blank">Get API key →</a></p>
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0" style="font-size:0.8rem">API Key</label>
+                  <span id="isset-openrouter.api_key" class="isset-badge"></span>
+                </div>
+                <div class="input-group input-group-sm">
+                  <input type="password" class="form-control" id="field-openrouter.api_key" placeholder="sk-or-v1-…" autocomplete="off">
+                  <button class="btn btn-outline-secondary" type="button" onclick="toggleShow('field-openrouter.api_key', this)" title="Show/hide"><i class="bi bi-eye"></i></button>
+                </div>
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                <button class="btn btn-sm btn-outline-secondary" onclick="testProvider('openrouter')">
+                  <i class="bi bi-lightning-charge me-1"></i>Test
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="saveProvider('openrouter', ['openrouter.api_key'])">
+                  <i class="bi bi-floppy me-1"></i>Save
+                </button>
+              </div>
+              <div id="result-openrouter" class="test-result" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ollama Cloud -->
+        <div class="col-md-6">
+          <div class="panel">
+            <div class="panel-header">
+              <span><i class="bi bi-hdd-network me-1"></i>Ollama Cloud</span>
+              <span id="status-ollama" class="provider-status s-nil">checking…</span>
+            </div>
+            <div class="panel-body">
+              <p class="provider-desc">Local and cloud-hosted Ollama models. <a href="https://ollama.com" target="_blank">ollama.com →</a></p>
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0" style="font-size:0.8rem">Base URL</label>
+                  <span id="isset-ollama.base_url" class="isset-badge"></span>
+                </div>
+                <div class="input-group input-group-sm">
+                  <input type="text" class="form-control" id="field-ollama.base_url" placeholder="http://localhost:11434" autocomplete="off">
+                </div>
+                <div class="form-text">Leave blank to use the OLLAMA_URL env var</div>
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                <button class="btn btn-sm btn-outline-secondary" onclick="testProvider('ollama')">
+                  <i class="bi bi-lightning-charge me-1"></i>Test
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="saveProvider('ollama', ['ollama.base_url'])">
+                  <i class="bi bi-floppy me-1"></i>Save
+                </button>
+              </div>
+              <div id="result-ollama" class="test-result" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Additional providers -->
+      <div class="settings-section-label mt-3">Additional Providers</div>
+      <div class="row g-3">
+
+        <!-- Mistral -->
+        <div class="col-md-6">
+          <div class="panel">
+            <div class="panel-header">
+              <span><i class="bi bi-wind me-1"></i>Mistral AI</span>
+              <span id="status-mistral" class="provider-status s-nil">checking…</span>
+            </div>
+            <div class="panel-body">
+              <p class="provider-desc">Mistral, Mixtral, and Codestral models. <a href="https://console.mistral.ai/api-keys" target="_blank">Get API key →</a></p>
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0" style="font-size:0.8rem">API Key</label>
+                  <span id="isset-mistral.api_key" class="isset-badge"></span>
+                </div>
+                <div class="input-group input-group-sm">
+                  <input type="password" class="form-control" id="field-mistral.api_key" placeholder="…" autocomplete="off">
+                  <button class="btn btn-outline-secondary" type="button" onclick="toggleShow('field-mistral.api_key', this)" title="Show/hide"><i class="bi bi-eye"></i></button>
+                </div>
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                <button class="btn btn-sm btn-outline-secondary" onclick="testProvider('mistral')">
+                  <i class="bi bi-lightning-charge me-1"></i>Test
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="saveProvider('mistral', ['mistral.api_key'])">
+                  <i class="bi bi-floppy me-1"></i>Save
+                </button>
+              </div>
+              <div id="result-mistral" class="test-result" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Deepseek -->
+        <div class="col-md-6">
+          <div class="panel">
+            <div class="panel-header">
+              <span><i class="bi bi-search me-1"></i>Deepseek</span>
+              <span id="status-deepseek" class="provider-status s-nil">checking…</span>
+            </div>
+            <div class="panel-body">
+              <p class="provider-desc">Direct access to Deepseek models. <a href="https://platform.deepseek.com/api_keys" target="_blank">Get API key →</a></p>
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0" style="font-size:0.8rem">API Key</label>
+                  <span id="isset-deepseek.api_key" class="isset-badge"></span>
+                </div>
+                <div class="input-group input-group-sm">
+                  <input type="password" class="form-control" id="field-deepseek.api_key" placeholder="sk-…" autocomplete="off">
+                  <button class="btn btn-outline-secondary" type="button" onclick="toggleShow('field-deepseek.api_key', this)" title="Show/hide"><i class="bi bi-eye"></i></button>
+                </div>
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                <button class="btn btn-sm btn-outline-secondary" onclick="testProvider('deepseek')">
+                  <i class="bi bi-lightning-charge me-1"></i>Test
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="saveProvider('deepseek', ['deepseek.api_key'])">
+                  <i class="bi bi-floppy me-1"></i>Save
+                </button>
+              </div>
+              <div id="result-deepseek" class="test-result" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Google AI Studio -->
+        <div class="col-md-6">
+          <div class="panel">
+            <div class="panel-header">
+              <span><i class="bi bi-google me-1"></i>Google AI Studio</span>
+              <span id="status-google" class="provider-status s-nil">checking…</span>
+            </div>
+            <div class="panel-body">
+              <p class="provider-desc">Gemini model family. <a href="https://aistudio.google.com/app/apikey" target="_blank">Get API key →</a></p>
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0" style="font-size:0.8rem">API Key</label>
+                  <span id="isset-google.api_key" class="isset-badge"></span>
+                </div>
+                <div class="input-group input-group-sm">
+                  <input type="password" class="form-control" id="field-google.api_key" placeholder="AIza…" autocomplete="off">
+                  <button class="btn btn-outline-secondary" type="button" onclick="toggleShow('field-google.api_key', this)" title="Show/hide"><i class="bi bi-eye"></i></button>
+                </div>
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                <button class="btn btn-sm btn-outline-secondary" onclick="testProvider('google')">
+                  <i class="bi bi-lightning-charge me-1"></i>Test
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="saveProvider('google', ['google.api_key'])">
+                  <i class="bi bi-floppy me-1"></i>Save
+                </button>
+              </div>
+              <div id="result-google" class="test-result" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Anthropic -->
+        <div class="col-md-6">
+          <div class="panel">
+            <div class="panel-header">
+              <span><i class="bi bi-cpu me-1"></i>Anthropic</span>
+              <span id="status-anthropic" class="provider-status s-nil">checking…</span>
+            </div>
+            <div class="panel-body">
+              <p class="provider-desc">Claude model family. <a href="https://console.anthropic.com/settings/keys" target="_blank">Get API key →</a></p>
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label mb-0" style="font-size:0.8rem">API Key</label>
+                  <span id="isset-anthropic.api_key" class="isset-badge"></span>
+                </div>
+                <div class="input-group input-group-sm">
+                  <input type="password" class="form-control" id="field-anthropic.api_key" placeholder="sk-ant-…" autocomplete="off">
+                  <button class="btn btn-outline-secondary" type="button" onclick="toggleShow('field-anthropic.api_key', this)" title="Show/hide"><i class="bi bi-eye"></i></button>
+                </div>
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                <button class="btn btn-sm btn-outline-secondary" onclick="testProvider('anthropic')">
+                  <i class="bi bi-lightning-charge me-1"></i>Test
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="saveProvider('anthropic', ['anthropic.api_key'])">
+                  <i class="bi bi-floppy me-1"></i>Save
+                </button>
+              </div>
+              <div id="result-anthropic" class="test-result" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /row -->
+
+      <div class="mt-3" style="font-size:0.75rem; color:#94a3b8">
+        <i class="bi bi-info-circle me-1"></i>
+        Keys are stored in the database. env vars (<code>OPENROUTER_API_KEY</code>, <code>OLLAMA_URL</code>, etc.) are used as fallback when no DB value is set.
+      </div>
+
+    </div><!-- /content-body -->
+  </div><!-- /main-content -->
+</div><!-- /app-wrapper -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/js/app.js"></script>
+<script>
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+function toggleShow(inputId, btn) {
+  const el = document.getElementById(inputId);
+  const isPassword = el.type === 'password';
+  el.type = isPassword ? 'text' : 'password';
+  btn.innerHTML = isPassword ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+}
+
+function showResult(provider, ok, message, latency) {
+  const el = document.getElementById(`result-${provider}`);
+  el.style.display = 'block';
+  const ms = latency ? ` <span class="s-nil">${latency}ms</span>` : '';
+  if (ok) {
+    el.className = 'test-result test-ok';
+    el.innerHTML = `<i class="bi bi-check-circle me-1"></i>${message}${ms}`;
+  } else {
+    el.className = 'test-result test-err';
+    el.innerHTML = `<i class="bi bi-x-circle me-1"></i>${message}`;
+  }
+}
+
+function setStatus(provider, isSet) {
+  const el = document.getElementById(`status-${provider}`);
+  if (!el) return;
+  if (isSet) {
+    el.className = 'provider-status';
+    el.style.color = '#16a34a';
+    el.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>Configured';
+  } else {
+    el.className = 'provider-status s-nil';
+    el.textContent = 'Not configured';
+  }
+}
+
+function setIssetBadge(key, isSet) {
+  const el = document.getElementById(`isset-${key}`);
+  if (!el) return;
+  if (isSet) {
+    el.className = 'isset-badge bdg bdg-green';
+    el.textContent = 'Set';
+  } else {
+    el.className = 'isset-badge bdg bdg-gray';
+    el.textContent = 'Not set';
+  }
+}
+
+// ── Load settings on page open ────────────────────────────────────────────────
+
+// Map provider id → its setting keys (for status badge)
+const PROVIDER_KEYS = {
+  openrouter: ['openrouter.api_key'],
+  ollama:     ['ollama.base_url'],
+  mistral:    ['mistral.api_key'],
+  deepseek:   ['deepseek.api_key'],
+  google:     ['google.api_key'],
+  anthropic:  ['anthropic.api_key'],
+};
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const settings = await fetch('/api/settings/').then(r => r.json());
+    const map = Object.fromEntries(settings.map(s => [s.key, s]));
+
+    // Populate isset badges and status per provider
+    for (const [provider, keys] of Object.entries(PROVIDER_KEYS)) {
+      const anySet = keys.some(k => map[k]?.is_set);
+      setStatus(provider, anySet);
+      for (const key of keys) {
+        const s = map[key];
+        if (s) setIssetBadge(key, s.is_set);
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to load settings:', e);
+  }
+});
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+
+async function saveProvider(provider, keys) {
+  const btn = event.currentTarget;
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving…';
+
+  try {
+    let anySet = false;
+    for (const key of keys) {
+      const input = document.getElementById(`field-${key}`);
+      if (!input) continue;
+      const val = input.value;
+      // Empty input = no change (don't overwrite existing key with blank)
+      if (!val) continue;
+      await fetch(`/api/settings/${encodeURIComponent(key)}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({value: val}),
+      }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); });
+      input.value = '';  // clear after save
+      setIssetBadge(key, true);
+      anySet = true;
+    }
+    setStatus(provider, true);
+    showResult(provider, true, anySet ? 'Saved successfully' : 'Nothing to save (field was empty)', null);
+  } catch (err) {
+    showResult(provider, false, `Save failed: ${err.message}`, null);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
+}
+
+// ── Test connection ───────────────────────────────────────────────────────────
+
+async function testProvider(provider) {
+  const btn = event.currentTarget;
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Testing…';
+  const resultEl = document.getElementById(`result-${provider}`);
+  resultEl.style.display = 'none';
+
+  try {
+    const res = await fetch(`/api/settings/test/${provider}`, {method: 'POST'}).then(r => r.json());
+    showResult(provider, res.ok, res.message, res.latency_ms);
+    if (res.ok) setStatus(provider, true);
+  } catch (err) {
+    showResult(provider, false, `Request failed: ${err.message}`, null);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
+}
+</script>
+</body>
+</html>
