@@ -183,4 +183,19 @@ def _do_test(provider: str) -> dict[str, Any]:
             return {"ok": True, "message": "Connected", "latency_ms": ms}
         return {"ok": False, "message": f"HTTP {resp.status_code}", "latency_ms": ms}
 
+    elif provider == "webhook":
+        url = _load("webhook.url", "WEBHOOK_URL")
+        if not url:
+            return {"ok": False, "message": "Webhook URL not configured", "latency_ms": 0}
+        from llm_curator.webhook import deliver
+        ok = deliver("test", {
+            "proposal_id": None,
+            "generated_at": "",
+            "summary": "Test event from llm-curator Settings",
+            "changes": [],
+            "needs_eval": [],
+        })
+        ms = int((time.monotonic() - start) * 1000)
+        return {"ok": ok, "message": "Test event delivered" if ok else "Delivery failed — check URL and logs", "latency_ms": ms}
+
     return {"ok": False, "message": f"Unknown provider: {provider!r}", "latency_ms": 0}

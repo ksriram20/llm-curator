@@ -241,9 +241,65 @@
 
       </div><!-- /row -->
 
+      <!-- Integrations -->
+      <div class="settings-section-label mt-4">Integrations</div>
+      <div class="row g-3">
+        <div class="col-md-12">
+          <div class="panel">
+            <div class="panel-header">
+              <span><i class="bi bi-plug me-1"></i>Proposal Webhook</span>
+              <span id="status-webhook" class="provider-status s-nil">checking…</span>
+            </div>
+            <div class="panel-body">
+              <p class="provider-desc">
+                When a proposal is marked <strong>Applied</strong>, llm-curator POSTs the change set as JSON to this URL.
+                Any codebase using OpenRouter or Ollama can consume it — LiteLLM, custom routers, scripts.
+                <a href="/USAGE.md" target="_blank">Integration guide →</a>
+              </p>
+              <div class="row g-3 mb-3">
+                <div class="col-md-7">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label mb-0" style="font-size:0.8rem">Webhook URL</label>
+                    <span id="isset-webhook.url" class="isset-badge"></span>
+                  </div>
+                  <input type="text" class="form-control form-control-sm" id="field-webhook.url"
+                         placeholder="https://your-app.example.com/webhooks/llm-curator" autocomplete="off">
+                  <div class="form-text">Receives POST requests with <code>X-LLM-Curator-Event: proposal.applied</code></div>
+                </div>
+                <div class="col-md-5">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label mb-0" style="font-size:0.8rem">Signing Secret</label>
+                    <span id="isset-webhook.secret" class="isset-badge"></span>
+                  </div>
+                  <div class="input-group input-group-sm">
+                    <input type="password" class="form-control" id="field-webhook.secret"
+                           placeholder="optional — used for HMAC-SHA256 signature" autocomplete="off">
+                    <button class="btn btn-outline-secondary" type="button"
+                            onclick="toggleShow('field-webhook.secret', this)" title="Show/hide">
+                      <i class="bi bi-eye"></i>
+                    </button>
+                  </div>
+                  <div class="form-text">Verify with <code>X-LLM-Curator-Signature</code> header</div>
+                </div>
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                <button class="btn btn-sm btn-outline-secondary" onclick="testWebhook()">
+                  <i class="bi bi-send me-1"></i>Send test event
+                </button>
+                <button class="btn btn-sm btn-primary"
+                        onclick="saveProvider('webhook', ['webhook.url', 'webhook.secret'])">
+                  <i class="bi bi-floppy me-1"></i>Save
+                </button>
+              </div>
+              <div id="result-webhook" class="test-result" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="mt-3" style="font-size:0.75rem; color:#94a3b8">
         <i class="bi bi-info-circle me-1"></i>
-        Keys are stored in the database. env vars (<code>OPENROUTER_API_KEY</code>, <code>OLLAMA_URL</code>, etc.) are used as fallback when no DB value is set.
+        Keys are stored in the database. env vars (<code>OPENROUTER_API_KEY</code>, <code>OLLAMA_URL</code>, <code>WEBHOOK_URL</code>, etc.) are used as fallback when no DB value is set.
       </div>
 
     </div><!-- /content-body -->
@@ -310,6 +366,7 @@ const PROVIDER_KEYS = {
   deepseek:   ['deepseek.api_key'],
   google:     ['google.api_key'],
   anthropic:  ['anthropic.api_key'],
+  webhook:    ['webhook.url', 'webhook.secret'],
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -360,6 +417,25 @@ async function saveProvider(provider, keys) {
     showResult(provider, true, anySet ? 'Saved successfully' : 'Nothing to save (field was empty)', null);
   } catch (err) {
     showResult(provider, false, `Save failed: ${err.message}`, null);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
+}
+
+// ── Webhook test ─────────────────────────────────────────────────────────────
+
+async function testWebhook() {
+  const btn = event.currentTarget;
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sending…';
+  document.getElementById('result-webhook').style.display = 'none';
+  try {
+    const res = await fetch('/api/settings/test/webhook', {method: 'POST'}).then(r => r.json());
+    showResult('webhook', res.ok, res.message, res.latency_ms);
+  } catch (err) {
+    showResult('webhook', false, `Request failed: ${err.message}`, null);
   } finally {
     btn.disabled = false;
     btn.innerHTML = origHtml;
