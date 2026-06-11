@@ -57,9 +57,17 @@ class ParsedConfig:
 
 
 def parse(path: str = DEFAULT_CONFIG_PATH) -> ParsedConfig:
-    """Parse the LiteLLM YAML at `path` into a normalised structure."""
-    with open(path) as f:
-        raw = yaml.safe_load(f)
+    """Parse the LiteLLM YAML at `path` into a normalised structure.
+
+    Returns an empty config if path is unset, missing, or blank.
+    """
+    if not path:
+        return ParsedConfig(aliases={}, path="")
+    try:
+        with open(path) as f:
+            raw = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return ParsedConfig(aliases={}, path=path)
 
     aliases: dict[str, AliasEntry] = {}
     for entry in raw.get("model_list", []):
