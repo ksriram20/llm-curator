@@ -68,7 +68,7 @@
 
 ---
 
-## v0.3 — In Progress
+## v0.3 — Completed
 
 All items below are v0.3 scope. Items 2–5 were originally proposed in v0.2 but deferred.
 
@@ -132,7 +132,30 @@ Two new deterministic graders + end-to-end wiring (leaderboard, migration, UI).
 
 ---
 
-## Deferred (post-v0.4)
+## v0.4.1 — Completed
+
+Webhook integration + repo-agnostic proposal export.
+
+### Webhook delivery
+- [x] `llm_curator/webhook.py` — `build_export()` reshapes raw DB row into clean schema-versioned JSON; `deliver()` POSTs with HMAC-SHA256 signature (`X-LLM-Curator-Signature`)
+- [x] Migration `10_webhook_settings.sql` — `webhook.url` + `webhook.secret` rows in `curator_settings`
+
+### Proposals API
+- [x] `GET /api/proposals/{id}/export` — clean JSON export (schema_version, changes, needs_eval)
+- [x] `POST /api/proposals/{id}/apply` — marks applied, fires webhook
+- [x] `POST /api/proposals/{id}/reject` — marks rejected
+- [x] `proposals.html` — Export JSON / Apply / Reject buttons; fixed `proposed_changes` array/object handling bug
+
+### Settings UI
+- [x] `settings.html` — Integrations section: webhook URL + signing secret fields, live test button
+- [x] `settings.py` — `POST /api/settings/test/webhook` sends a test event to the configured URL
+
+### Documentation
+- [x] `USAGE.md` — repo-agnostic integration guide: export API, webhook setup, LiteLLM YAML patch, direct OpenRouter, FastAPI handler recipe with signature verification
+
+---
+
+## Deferred (post-v0.4.1)
 
 - UI redesign ("Claude Design" — full visual refresh)
 - LLM-written narrative reports per model (`llms/<source>/<model>.md`)
@@ -143,4 +166,4 @@ Two new deterministic graders + end-to-end wiring (leaderboard, migration, UI).
 
 ---
 
-*Last updated: 2026-06-10 | Maintainer: Sriram*
+*Last updated: 2026-06-11 | Maintainer: Sriram*
